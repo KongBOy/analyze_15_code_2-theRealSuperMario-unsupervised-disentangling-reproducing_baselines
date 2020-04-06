@@ -26,10 +26,17 @@ class Test_Model:
         C = 3
         image_batch = np.zeros((N, H, W, C), dtype=np.float32)
         image_batch_tiled = tf.tile(image_batch, [2, 1, 1, 1])
-        arg = ModelArgs()
+        arg = ModelArgs(bn=1)
 
-        tps_param_dic = tps.no_transformation_parameters(2 * N)
-        model = Model(image_batch_tiled, arg, tps_param_dic)
+        tps_params = tps.no_transformation_parameters(2 * N)
+        tps_param_dic = tps.tps_parameters(**tps_params)
+        from dotmap import DotMap
+
+        tps_param_dic = DotMap(tps_param_dic)
+
+        model = Model(
+            image_batch_tiled, arg, tps_param_dic, optimize=False, visualize=False
+        )
 
 
 def test_convs():
