@@ -3,7 +3,7 @@ import numpy as np
 from utils import wrappy
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import random_ops
-
+import torch
 
 def AbsDetJacobian(batch_meshgrid):
     """
@@ -120,6 +120,16 @@ def softmax(logit_map):
     norm = tf.reduce_sum(exp, axis=[1, 2], keepdims=True) + eps
     softmax = exp / norm
     return softmax
+
+
+def spatial_softmax(logit_map):
+    eps = 1.0e-12
+    m, _ = torch.max(logit_map, dim=3, keepdim=True)
+    m, _ = torch.max(m, dim=2, keepdim=True)
+    exp = torch.exp(logit_map - m)
+    norm = torch.sum(exp, dim=[1, 2], keepdims=True) + eps
+    sm = exp / norm
+    return sm
 
 
 
