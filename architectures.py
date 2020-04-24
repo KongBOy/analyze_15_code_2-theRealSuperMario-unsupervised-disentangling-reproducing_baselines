@@ -8,6 +8,7 @@ import torch
 import architecture_ops
 
 import ops
+import ops_pt
 
 
 @wrappy
@@ -262,7 +263,8 @@ def _hourglass(inputs, n, numOut, train, name="hourglass"):
 
 
 class SeperateHourglass_128(torch.nn.Module):
-    H = 128 # assumed input height during forward pass
+    H = 128  # assumed input height during forward pass
+
     def __init__(
         self, in_channels, n_landmarks, n_features, n_features_1, n_features_2
     ):
@@ -273,23 +275,56 @@ class SeperateHourglass_128(torch.nn.Module):
         self.n_features_1 = n_features_1
         self.n_features_2 = n_features_2
 
-        self.conv_bn_relu_1 = architecture_ops.ConvBnRelu(self.in_channels, 64, kernel_size=6, strides=2)
+        self.conv_bn_relu_1 = architecture_ops.ConvBnRelu(
+            self.in_channels, 64, kernel_size=6, strides=2
+        )
 
-        self.conv_bn_relu_2 = architecture_ops.ConvBnRelu(self.n_features_1, self.n_features_1, kernel_size=1, strides=1)
-        self.conv_2_1 = torch.nn.Conv2d(self.n_features_1, self.n_features_1, kernel_size=1, stride=1, padding=0, bias=False)
-        self.conv_2_2 = torch.nn.Conv2d(self.n_features_1, self.n_landmarks, kernel_size=1, stride=1, padding=0, bias=False)
-        self.conv_2_3 = torch.nn.Conv2d(self.n_landmarks, self.n_features_1, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv_bn_relu_2 = architecture_ops.ConvBnRelu(
+            self.n_features_1, self.n_features_1, kernel_size=1, strides=1
+        )
+        self.conv_2_1 = torch.nn.Conv2d(
+            self.n_features_1,
+            self.n_features_1,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
+        self.conv_2_2 = torch.nn.Conv2d(
+            self.n_features_1,
+            self.n_landmarks,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
+        self.conv_2_3 = torch.nn.Conv2d(
+            self.n_landmarks,
+            self.n_features_1,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
 
         self.res1 = architecture_ops.ResidualBlock(64, self.n_features_1)
         nLow = 4
         n_Low_feat = 1
         self.dropout_rate = 0.2
 
-        self.hg1 = Hourglass(self.n_features_1, self.n_features_1, Bottleneck, 1, 64, nLow)
-        self.hg2 = Hourglass(self.n_features_1, self.n_features_2, Bottleneck, 1, 64, n_Low_feat)
+        self.hg1 = Hourglass(
+            self.n_features_1, self.n_features_1, Bottleneck, 1, 64, nLow
+        )
+        self.hg2 = Hourglass(
+            self.n_features_1, self.n_features_2, Bottleneck, 1, 64, n_Low_feat
+        )
 
-        self.conv_bn_relu_3 = architecture_ops.ConvBnRelu(self.n_features_2, self.n_features_2, kernel_size=1, strides=1)
-        self.conv_3_1 = torch.nn.Conv2d(self.n_features_2, self.n_features, 1, 1, padding=0)
+        self.conv_bn_relu_3 = architecture_ops.ConvBnRelu(
+            self.n_features_2, self.n_features_2, kernel_size=1, strides=1
+        )
+        self.conv_3_1 = torch.nn.Conv2d(
+            self.n_features_2, self.n_features, 1, 1, padding=0
+        )
 
     def forward(self, x):
         hg = [None] * 2
@@ -309,7 +344,7 @@ class SeperateHourglass_128(torch.nn.Module):
         ll[0] = self.conv_bn_relu_2(drop[0])
         ll_[0] = self.conv_2_1(ll[0])
         out[0] = self.conv_2_2(ll[0])
-        out_[0] = self.conv_2_3(ops.spatial_softmax(out[0]))
+        out_[0] = self.conv_2_3(ops_pt.spatial_softmax(out[0]))
         sum_[0] = out_[0] + r3
 
         hg[1] = self.hg2(sum_[0])
@@ -318,8 +353,7 @@ class SeperateHourglass_128(torch.nn.Module):
         out[1] = self.conv_3_1(ll[1])
         features = out[1]
 
-        return ops.spatial_softmax(out[0]), features
-
+        return ops_pt.spatial_softmax(out[0]), features
 
 
 @wrappy
@@ -358,7 +392,9 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 r3 = _residual(r2, num_out=nFeat_1, train=train, name="r3")
 
             elif h == 128:
-                pad1 = tf.pad(inputs, [[0, 0], [2, 2], [2, 2], [0, 0]], name="pad_1") # shape [1, 132, 132, 10]
+                pad1 = tf.pad(
+                    inputs, [[0, 0], [2, 2], [2, 2], [0, 0]], name="pad_1"
+                )  # shape [1, 132, 132, 10]
                 conv1 = _conv_bn_relu(
                     pad1,
                     filters=64,
@@ -366,7 +402,7 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                     kernel_size=6,
                     strides=2,
                     name="conv_64_to_32",
-                ) # shape [1, 64, 64, 64]
+                )  # shape [1, 64, 64, 64]
                 r3 = _residual(conv1, num_out=nFeat_1, train=train, name="r3")
                 # shape [1, 64, 64, nFeat_1]
             elif h == 64:
@@ -385,10 +421,12 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 raise ValueError
 
         with tf.variable_scope("stage_0"):
-            hg[0] = _hourglass(r3, nLow, nFeat_1, train=train, name="hourglass") # [1, 64, 64, nFeat_1]
+            hg[0] = _hourglass(
+                r3, nLow, nFeat_1, train=train, name="hourglass"
+            )  # [1, 64, 64, nFeat_1]
             drop[0] = tf.layers.dropout(
                 hg[0], rate=dropout_rate, training=train, name="dropout"
-            ) # [1, 64, 64, nFeat_1]
+            )  # [1, 64, 64, nFeat_1]
             ll[0] = _conv_bn_relu(
                 drop[0],
                 nFeat_1,
@@ -397,19 +435,23 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 strides=1,
                 pad="VALID",
                 name="conv",
-            ) # [1, 64, 64, nFeat_1]
-            ll_[0] = _conv(ll[0], nFeat_1, 1, 1, "VALID", "ll") # [1, 64, 64, nFeat_1]
-            out[0] = _conv(ll[0], n_landmark, 1, 1, "VALID", "out") # [1, 64, 64, n_landmark]
-            out_[0] = _conv(softmax(out[0]), nFeat_1, 1, 1, "VALID", "out_") # [1, 64, 64, nFeat_1]
-            sum_[0] = tf.add_n([out_[0], r3], name="merge") # [1, 64, 64, nFeat_1]
+            )  # [1, 64, 64, nFeat_1]
+            ll_[0] = _conv(ll[0], nFeat_1, 1, 1, "VALID", "ll")  # [1, 64, 64, nFeat_1]
+            out[0] = _conv(
+                ll[0], n_landmark, 1, 1, "VALID", "out"
+            )  # [1, 64, 64, n_landmark]
+            out_[0] = _conv(
+                softmax(out[0]), nFeat_1, 1, 1, "VALID", "out_"
+            )  # [1, 64, 64, nFeat_1]
+            sum_[0] = tf.add_n([out_[0], r3], name="merge")  # [1, 64, 64, nFeat_1]
 
         with tf.variable_scope("stage_1"):
             hg[1] = _hourglass(
                 sum_[0], n_Low_feat, nFeat_2, train=train, name="hourglass"
-            ) # [1, 64, 64, nFeat_2]
+            )  # [1, 64, 64, nFeat_2]
             drop[1] = tf.layers.dropout(
                 hg[1], rate=dropout_rate, training=train, name="dropout"
-            ) # [1, 64, 64, nFeat_2]
+            )  # [1, 64, 64, nFeat_2]
             ll[1] = _conv_bn_relu(
                 drop[1],
                 nFeat_2,
@@ -418,12 +460,12 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 strides=1,
                 pad="VALID",
                 name="conv",
-            ) # [1, 64, 64, nFeat_2]
+            )  # [1, 64, 64, nFeat_2]
 
             out[1] = _conv(ll[1], n_features, 1, 1, "VALID", "out")
             # [1, 64, 64, n_features]
 
-        features = out[1] # [1, 64, 64, nFeat_2]
+        features = out[1]  # [1, 64, 64, nFeat_2]
         return softmax(out[0]), features
 
 
