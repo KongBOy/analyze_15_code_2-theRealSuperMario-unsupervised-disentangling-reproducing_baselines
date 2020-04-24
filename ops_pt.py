@@ -11,9 +11,6 @@ import tfpyth
 import ops
 import ops_pt
 
-# SESSION = tf.compat.v1.Session()
-# tf.disable_eager_execution()
-
 
 def AbsDetJacobian(batch_meshgrid):
     return tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
@@ -293,19 +290,19 @@ def get_features(features, part_map, slim):
 
 
 def augm_mu(image_in, image_rec, mu, features, batch_size, n_parts, move_list):
-    image_in = tile(torch.unsqueeze(image_in[0]), batch_size, dim=0)
-    image_rec = tile(torch.unsqueeze(image_rec[0]), batch_size, dim=1)
-    mu = tile(torch.unsqueeze(mu[0]), batch_size, dim=0)
-    features = tile(torch.unsqueeze(features[0]), batch_size, dim=0)
+    image_in = tile_nd(torch.unsqueeze(image_in[0], dim=0), [batch_size, 1, 1, 1])
+    image_rec = tile_nd(torch.unsqueeze(image_rec[0], dim=0), [batch_size, 1, 1, 1])
+    mu = tile_nd(torch.unsqueeze(mu[0], dim=0), [batch_size, 1, 1])
+    features = tile_nd(torch.unsqueeze(features[0], dim=0), [batch_size, 1, 1])
     batch_size = batch_size // 2
-    ran = torch.range(batch_size).view([batch_size, 1]) / batch_size - 0.5
+    ran = torch.arange(batch_size).view([batch_size, 1]) / batch_size - 0.5
     array = torch.cat(
         [
             torch.cat([ran, torch.zeros_like(ran)], dim=-1),
             torch.cat([torch.zeros_like(ran), ran], dim=1),
         ]
     )
-    array = torch.unsqueeze(torch.cast(array, array, dtype=torch.float32), dim=1)
+    array = torch.unsqueeze(torch_astype(array, dtype=torch.float32), dim=1)
     for elem in move_list:
         part = torch.constant(elem, dtype=torch.int32, shape=([1, 1]))
         pad_part = torch.constant([[1, 1], [0, 0]])
@@ -340,6 +337,9 @@ def feat_mu_to_enc(
     feat_shape=None,
     heat_feat_normalize=True,
     range_=10,
+    # bs=2,
+    # n_features=64,
+    # n_keypoints=64
 ):
     # features_ph = tf.compat.v1.placeholder(tf.float32, name="features_ph")
     # mu_ph = tf.compat.v1.placeholder(tf.float32, name="mu_ph")
@@ -364,26 +364,111 @@ def feat_mu_to_enc(
     # ).apply
 
     # TODO: define input
-    f = wrap_tf_func(ops.feat_mu_to_enc, ["features", "mu", "L_inv"])
-    return f(features, mu, L_inv)
+    # def func(features, mu, L_inv):
+    #     out = ops.feat_mu_to_enc(features, mu, L_inv, reconstruct_stages, part_depths, feat_map_depths, static, n_reverse, covariance=covariance, feat_shape=feat_shape, heat_feat_normalize=heat_feat_normalize)
+    #     return out
+    # f = tfpyth.wrap_torch_from_tensorflow(func, ["features", "mu", "L_inv"], [(bs, n_keypoints, n_features), (bs, n_keypoints, 2), (bs, n_keypoints, 2, 2)])
+    # return f(features, mu, L_inv)
+    bn, nk, nf = list(features.shape)
+    if static:
+        reverse_features = torch.cat([features[bn // 2 :], features[: bn // 2]], dim=0)
+
+    else:
+        reverse_features = reverse_batch(features, n_reverse)
+
+    encoding_list = []
+    circular_precision = tile_nd(
+        torch_reshape(
+            torch.tensor([[range_, 0.0], [0, range_]], dtype=torch.float32),
+            shape=[1, 1, 2, 2],
+        ),
+        [bn, nk, 1, 1],
+    )
+    for dims, part_depth, feat_slice in zip(reconstruct_stages, part_depths, feat_map_depths):
+        h, w = dims[0], dims[1]
+
+        y_t = torch.unsqueeze(
+            tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, h), [h, 1]), [1, w]), dim=-1
+        )
+        x_t = torch.unsqueeze(
+            tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, w), [1, w]), [h, 1]), dim=-1
+        )
+
+        y_t_flat = torch_reshape(y_t, (1, 1, 1, -1))
+        x_t_flat = torch_reshape(x_t, (1, 1, 1, -1))
+
+        mesh = torch.cat([y_t_flat, x_t_flat], dim=-2)
+        dist = mesh - torch.unsqueeze(mu, dim=-1)
+
+        if not covariance or not feat_shape:
+            heat_circ, part_heat_circ = precision_dist_op(
+                circular_precision, dist, part_depth, nk, h, w
+            )
+
+        if covariance or feat_shape:
+            heat_shape, part_heat_shape = precision_dist_op(
+                L_inv, dist, part_depth, nk, h, w
+            )
+
+        nkf = feat_slice[1] - feat_slice[0]
+
+        if nkf != 0:
+            feature_slice_rev = reverse_features[:, feat_slice[0] : feat_slice[1]]
+
+            if feat_shape:
+                heat_scal = heat_shape[:, feat_slice[0] : feat_slice[1]]
+
+            else:
+                heat_scal = heat_circ[:, feat_slice[0] : feat_slice[1]]
+
+            if heat_feat_normalize:
+                heat_scal_norm = torch.sum(heat_scal, dim=1, keepdims=True) + 1
+                heat_scal = heat_scal / heat_scal_norm
+
+            heat_feat_map = torch.einsum("bkij,bkn->bijn", heat_scal, feature_slice_rev)
+
+            if covariance:
+                encoding_list.append(
+                    torch.cat([part_heat_shape, heat_feat_map], dim=-1)
+                )
+
+            else:
+                encoding_list.append(
+                    torch.cat([part_heat_circ, heat_feat_map], dim=-1)
+                )
+
+        else:
+            if covariance:
+                encoding_list.append(part_heat_shape)
+
+            else:
+                encoding_list.append(part_heat_circ)
+
+    return encoding_list
+
 
 
 def heat_map_function(y_dist, x_dist, y_scale, x_scale):
     # TODO: write test
-    x = 1 / (1 + torch.square(y_dist / (1e-6 + y_scale))) + torch.square(
-        x_dist / (1e-6 + x_scale)
-    )
+    term_1 = (y_dist / (1e-6 + y_scale)) ** 2
+    term_2 = (x_dist / (1e-6 + x_scale)) ** 2
+    x = 1 / (term_1 + term_2 + 1)
     return x
 
 
 def unary_mat(vector):
     # TODO: write test. Einsum probably needs adjustment
-    b_1 = torch.unsqueeze(vector, axis=-2)
+    b_1 = torch.unsqueeze(vector, dim=-2)
+    reverse_vector = flip(vector, -1)
     b_2 = torch.unsqueeze(
-        torch.einsum("bkc,c->bkc", vector[:, :, ::-1]),
-        torch.constant([-1.0, 1], dtype=torch.float32),
+        torch.einsum(
+            "bkc,c->bkc",
+            reverse_vector,
+            torch.tensor(np.array([-1.0, 1]), dtype=torch.float32),
+        ),
+        dim=-2,
     )
-    U_mat = torch.cat([b_1, b_2], axis=-2)
+    U_mat = torch.cat([b_1, b_2], dim=-2)
     return U_mat
 
 
@@ -425,7 +510,9 @@ def get_img_slice_around_mu(img, mu, slice_size, h, w, nk):
     idx = torch_astype(idx, torch.int32)
 
     image_slices = gather_nd(img, idx, img.shape, idx.shape)
-    image_slices = image_slices.permute((0, 1, 4, 2, 3)) # [N, nk, H, W, C] -> [N, nk, C, H, W]
+    image_slices = image_slices.permute(
+        (0, 1, 4, 2, 3)
+    )  # [N, nk, H, W, C] -> [N, nk, C, H, W]
     return image_slices
 
 
@@ -436,34 +523,128 @@ def gather_nd(params, indices, params_shape, indices_shape):
         return tf.gather_nd(params, indices)
 
     out = tfpyth.wrap_torch_from_tensorflow(
-        func, ["params", "indices"], input_shapes=[params_shape, indices_shape], input_dtypes=[tf.float32, tf.int32]
+        func,
+        ["params", "indices"],
+        input_shapes=[params_shape, indices_shape],
+        input_dtypes=[tf.float32, tf.int32],
     )(params, indices)
     return out
 
 
-def fold_img_with_mu(img, mu, scale, visualize, threshold, normalize=True):
+def fold_img_with_mu(img, mu, scale, threshold, normalize=True):
     # TODO: rewrite this in pytorch
-    pass
+    # pass
+    bn, nc, h, w = list(img.shape)
+    bn, nk, _ = list(mu.shape)
+    py = torch.unsqueeze(mu[:, :, 0], 2).detach()
+    px = torch.unsqueeze(mu[:, :, 1], 2).detach()
+
+    y_t = tile_nd(torch_reshape(torch.linspace(-1, 1, h), [h, 1]), [1, w])
+    x_t = tile_nd(torch_reshape(torch.linspace(-1, 1, w), [1, w]), [h, 1])
+
+    x_t_flat = torch_reshape(x_t, (1, 1, -1))
+    y_t_flat = torch_reshape(y_t, (1, 1, -1))
+
+    y_dist = py - y_t_flat
+    x_dist = px - x_t_flat
+
+    heat_scal = heat_map_function(
+        y_dist=y_dist, x_dist=x_dist, x_scale=scale, y_scale=scale
+    )
+    heat_scal = torch_reshape(heat_scal, [bn, nk, h, w])
+    heat_scal = torch.einsum("bkij->bij", heat_scal)
+    heat_scal = heat_scal.clamp(0.0, 1.0)
+
+    heat_scal = torch.where(
+        heat_scal > threshold,
+        heat_scal,
+        torch.zeros_like(heat_scal, dtype=heat_scal.dtype),
+    )
+
+    norm = torch.sum(heat_scal, dim=(1, 2), keepdims=True)
+    if normalize:
+        heat_scal_norm = heat_scal / norm
+        folded_img = torch.einsum("bcij,bij->bcij", img, heat_scal_norm)
+    else:
+        folded_img = torch.einsum("bcij,bij->bcij", img, heat_scal)
+
+    return folded_img, torch.unsqueeze(heat_scal, axis=1)
 
 
 def mu_img_gate(mu, resolution, scale):
     # TODO: rewrite this in pytorch
-    pass
+    # pass
+    bn, nk, _ = list(mu.shape)
+    py = torch.unsqueeze(mu[:, :, 0], 2).detach()
+    px = torch.unsqueeze(mu[:, :, 1], 2).detach()
+
+    h, w = resolution
+    y_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, h), [h, 1]), [1, w])
+    x_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, w), [1, w]), [h, 1])
+    x_t_flat = torch_reshape(x_t, (1, 1, -1))
+    y_t_flat = torch.reshape(y_t, (1, 1, -1))
+
+    y_dist = py - y_t_flat
+    x_dist = py - x_t_flat
+
+    heat_scal = heat_map_function(
+        y_dist=y_dist, x_dist=x_dist, x_scale=scale, y_scale=scale
+    )
+    heat_scal = torch_reshape(heat_scal, shape=[bn, nk, h, w])
+    heat_scal = torch.einsum("bkij->bij", heat_scal)
+    return heat_scal
 
 
 def binary_activation(x):
     # TODO: rewrite this in pytorch
-    pass
+    cond = x < torch.zeros_like(x)
+    out = torch.where(cond, torch.zeros_like(x), torch.ones_like(x))
+    return out
 
 
-def fold_img_with_L_inv(img, mu, L_inv, scale, visualize, threshold, normalize=True):
-    # TODO: rewrite this in pytorch
-    pass
+def fold_img_with_L_inv(img, mu, L_inv, scale, threshold, normalize=True):
+    bn, nc, h, w = list(img.shape)
+    bn, nk, _ = list(mu.shape)
+
+    mu_stop = mu.detach()
+
+    y_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, h), [h, 1]), [1, w])
+    x_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, w), [1, w]), [h, 1])
+    x_t_flat = torch_reshape(x_t, (1, 1, -1))
+    y_t_flat = torch_reshape(y_t, (1, 1, -1))
+
+    mesh = torch.cat([y_t_flat, x_t_flat], dim=-2)
+    dist = mesh - torch.unsqueeze(mu_stop, dim=-1)
+
+    proj_precision = torch.einsum("bnik,bnkf->bnif", scale * L_inv, dist) ** 2
+    proj_precision = torch.sum(proj_precision, dim=-2)
+
+    heat = 1 / (1 + proj_precision)
+
+    heat = torch.reshape(heat, shape=[bn, nk, h, w])
+    heat = torch.einsum("bkij->bij", heat)
+    heat_scal = heat.clamp(0.0, 1.0)
+    heat_scal = torch.where(
+        heat_scal > threshold, heat_scal, torch.zeros_like(heat_scal)
+    )
+    norm = torch.sum(
+        heat_scal, dim=[1, 2], keepdims=True
+    )  # sum over spatial dimensions
+    if normalize:
+        heat_scal = heat_scal / norm
+    folded_img = torch.einsum("bcij,bij->bcij", img, heat_scal)
+    return folded_img
 
 
 def probabilistic_switch(handles, handle_probs, counter, scale=10000.0):
-    # TODO: rewrite this in pytorch
-    pass
+    t = counter / scale
+    scheduled_probs = []
+    for p_1, p_2 in zip(handle_probs[::2], handle_probs[1::2]):
+        scheduled_prob = t * p_1 + (1 - t) * p_2
+        scheduled_probs.append(scheduled_prob)
+
+    handle = np.random.choice(handles, p=scheduled_probs)
+    return handle
 
 
 def spatial_softmax(logit_map):
@@ -475,3 +656,30 @@ def spatial_softmax(logit_map):
     sm = exp / norm
     return sm
 
+
+def flip(x, dim):
+    """Reverse tensor order aling given dimension.
+    Drop-in replacement for tf.reverse(x, axis)
+    
+    Parameters
+    ----------
+    x : torch.Tensor
+        tensor to flip
+    dim : int
+        dimension along which to flip
+    
+    Returns
+    -------
+    torch.Tensor
+        flipped tensor
+
+    References
+    ----------
+
+    [1] : https://github.com/pytorch/pytorch/issues/229
+    """
+    indices = [slice(None)] * x.dim()
+    indices[dim] = torch.arange(
+        x.size(dim) - 1, -1, -1, dtype=torch.long, device=x.device
+    )
+    return x[tuple(indices)]
