@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentangling/")
 
-tf.enable_eager_execution()
+# tf.enable_eager_execution()
 
 
 class Test_Architectures:
@@ -72,4 +72,3 @@ class Test_Architectures:
         )
         assert smtfnn.shape_as_list(y[0]) == [1, 64, 64, n_landmark]
         assert smtfnn.shape_as_list(y[1]) == [1, 64, 64, n_features]
-
