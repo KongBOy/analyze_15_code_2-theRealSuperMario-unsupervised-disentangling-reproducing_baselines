@@ -56,4 +56,3 @@ class Test_Architectures_pt:
         )(x)
         assert smptnn.shape_as_list(y[0]) == [1, n_landmark, 64, 64]
         assert smptnn.shape_as_list(y[1]) == [1, n_features, 64, 64]
-
