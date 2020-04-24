@@ -49,4 +49,3 @@ class Test_ArchitectureOps_pt:
         x = torch.ones((N, C, H, W))
         c_bn_relu = architecture_ops.ConvBLock(C, C_out)(x)
         assert list(c_bn_relu.shape) == [1, C_out, H, W]
-
