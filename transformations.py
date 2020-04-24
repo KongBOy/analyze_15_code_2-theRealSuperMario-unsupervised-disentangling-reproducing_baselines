@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from dotmap import DotMap
 
+
 def tf_rotation_mat(rotation):
     """
     :param rotation: tf tensor of shape [1]
@@ -14,27 +15,58 @@ def tf_rotation_mat(rotation):
     mat = tf.concat([row_1, row_2], axis=0)
     return mat
 
+
 def tps_parameters(batch_size, scal, tps_scal, rot_scal, off_scal, scal_var, rescal=1):
-    coord = tf.constant([[[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5],
-                         [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2], [-0.2, - 0.2]]]
-                        , dtype=tf.float32)
+    coord = tf.constant(
+        [
+            [
+                [-0.5, -0.5],
+                [0.5, -0.5],
+                [-0.5, 0.5],
+                [0.5, 0.5],
+                [0.2, -0.2],
+                [-0.2, 0.2],
+                [0.2, 0.2],
+                [-0.2, -0.2],
+            ]
+        ],
+        dtype=tf.float32,
+    )
 
     coord = tf.tile(coord, [batch_size, 1, 1])
     shape = coord.get_shape()
     coord = coord + tf.random_uniform(shape=shape, minval=-0.2, maxval=0.2)
-    vector = tf.random_uniform(shape=shape, minval=-tps_scal, maxval=tps_scal, dtype=tf.float32)
+    vector = tf.random_uniform(
+        shape=shape, minval=-tps_scal, maxval=tps_scal, dtype=tf.float32
+    )
 
-    offset = tf.random_uniform(shape=[batch_size, 1, 2], minval=-off_scal, maxval=off_scal, dtype=tf.float32)
-    offset_2 = tf.random_uniform(shape=[batch_size, 1, 2], minval=-off_scal, maxval=off_scal, dtype=tf.float32)
-    t_scal = tf.random_uniform(shape=[batch_size, 2], minval=scal * (1. - scal_var), maxval=scal * (1. + scal_var),
-                               dtype=tf.float32)
+    offset = tf.random_uniform(
+        shape=[batch_size, 1, 2], minval=-off_scal, maxval=off_scal, dtype=tf.float32
+    )
+    offset_2 = tf.random_uniform(
+        shape=[batch_size, 1, 2], minval=-off_scal, maxval=off_scal, dtype=tf.float32
+    )
+    t_scal = tf.random_uniform(
+        shape=[batch_size, 2],
+        minval=scal * (1.0 - scal_var),
+        maxval=scal * (1.0 + scal_var),
+        dtype=tf.float32,
+    )
     t_scal = t_scal * rescal
 
-    rot_param = tf.random_uniform(shape=[batch_size, 1], minval=-rot_scal, maxval=rot_scal, dtype=tf.float32)
+    rot_param = tf.random_uniform(
+        shape=[batch_size, 1], minval=-rot_scal, maxval=rot_scal, dtype=tf.float32
+    )
     rot_mat = tf.map_fn(tf_rotation_mat, rot_param)
 
-    parameter_dict = {'coord': coord, 'vector': vector, 'offset': offset, 'offset_2': offset_2,
-                      't_scal': t_scal, 'rot_mat': rot_mat}
+    parameter_dict = {
+        "coord": coord,
+        "vector": vector,
+        "offset": offset,
+        "offset_2": offset_2,
+        "t_scal": t_scal,
+        "rot_mat": rot_mat,
+    }
     parameter_dict = DotMap(parameter_dict)
     return parameter_dict
 
@@ -64,15 +96,17 @@ def make_input_tps_param(tps_param, move_point=None, scal_point=None):
     rot_mat = tps_param.rot_mat
     t_scal = tps_param.t_scal
 
-    scaled_coord = tf.einsum('bk,bck->bck', t_scal, coord + vector - offset) + offset
-    t_vector = tf.einsum('blk,bck->bcl', rot_mat, scaled_coord - offset_2) + offset_2 - coord
+    scaled_coord = tf.einsum("bk,bck->bck", t_scal, coord + vector - offset) + offset
+    t_vector = (
+        tf.einsum("blk,bck->bcl", rot_mat, scaled_coord - offset_2) + offset_2 - coord
+    )
 
     if move_point is not None and scal_point is not None:
-        coord = tf.einsum('bk,bck->bck', scal_point, coord + move_point)
-        t_vector = tf.einsum('bk,bck->bck', scal_point, t_vector)
+        coord = tf.einsum("bk,bck->bck", scal_point, coord + move_point)
+        t_vector = tf.einsum("bk,bck->bck", scal_point, t_vector)
 
     else:
-        assert(move_point is None and scal_point is None)
+        assert move_point is None and scal_point is None
 
     return coord, t_vector
 
@@ -83,12 +117,14 @@ def adapt_tps_for_crop(tps_param, move_point, scal_point):
     :param tps_param:
     :return:
     """
-    move_point = - move_point
-    scal_point = 1. / scal_point
+    move_point = -move_point
+    scal_point = 1.0 / scal_point
     crop_coord, t_vector_coord = make_input_tps_param(tps_param, move_point, scal_point)
     return crop_coord, t_vector_coord
 
-#code adapted from https://github.com/iwyoo/tf_ThinPlateSpline
+
+# code adapted from https://github.com/iwyoo/tf_ThinPlateSpline
+
 
 def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
 
@@ -101,24 +137,26 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
     channels = n_c
     out_height = out_size
     out_width = out_size
-    height_f = tf.cast(height, 'float32')
-    width_f = tf.cast(width, 'float32')
+    height_f = tf.cast(height, "float32")
+    width_f = tf.cast(width, "float32")
     num_point = tf.shape(coord)[1]
 
     def _repeat(x, n_repeats):
-        rep = tf.transpose(tf.expand_dims(tf.ones(shape=tf.stack([n_repeats, ])), 1), [1, 0])
-        rep = tf.cast(rep, 'int32')
+        rep = tf.transpose(
+            tf.expand_dims(tf.ones(shape=tf.stack([n_repeats,])), 1), [1, 0]
+        )
+        rep = tf.cast(rep, "int32")
         x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
         return tf.reshape(x, [-1])
 
     def _interpolate(im, y, x):
         # constants
-        y = tf.cast(y, 'float32')
-        x = tf.cast(x, 'float32')
+        y = tf.cast(y, "float32")
+        x = tf.cast(x, "float32")
 
-        zero = tf.zeros([], dtype='int32')
-        max_y = tf.cast(height - 1, 'int32')
-        max_x = tf.cast(width - 1, 'int32')
+        zero = tf.zeros([], dtype="int32")
+        max_y = tf.cast(height - 1, "int32")
+        max_x = tf.cast(width - 1, "int32")
 
         # scale indices from aprox [-1, 1] to [0, width/height]
 
@@ -129,9 +167,9 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
         x = tf.reshape(x, [-1])
 
         # do sampling
-        y0 = tf.cast(tf.floor(y), 'int32')
+        y0 = tf.cast(tf.floor(y), "int32")
         y1 = y0 + 1
-        x0 = tf.cast(tf.floor(x), 'int32')
+        x0 = tf.cast(tf.floor(x), "int32")
         x1 = x0 + 1
 
         y0 = tf.clip_by_value(y0, zero, max_y)
@@ -150,17 +188,17 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
         # use indices to lookup pixels in the flat image and restore
         # channels dim
         im_flat = tf.reshape(im, [-1, channels])
-        im_flat = tf.cast(im_flat, 'float32')
+        im_flat = tf.cast(im_flat, "float32")
         Ia = tf.gather(im_flat, idx_a)
         Ib = tf.gather(im_flat, idx_b)
         Ic = tf.gather(im_flat, idx_c)
         Id = tf.gather(im_flat, idx_d)
 
         # and finally calculate interpolated values
-        x0_f = tf.cast(x0, 'float32')
-        x1_f = tf.cast(x1, 'float32')
-        y0_f = tf.cast(y0, 'float32')
-        y1_f = tf.cast(y1, 'float32')
+        x0_f = tf.cast(x0, "float32")
+        x1_f = tf.cast(x1, "float32")
+        y0_f = tf.cast(y0, "float32")
+        y1_f = tf.cast(y1, "float32")
         wa = tf.expand_dims(((x1_f - x) * (y1_f - y)), 1)
         wb = tf.expand_dims(((x1_f - x) * (y - y0_f)), 1)
         wc = tf.expand_dims(((x - x0_f) * (y1_f - y)), 1)
@@ -170,8 +208,12 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
 
     def _meshgrid(height, width, coord):
 
-        x_t = tf.tile(tf.reshape(tf.linspace(- 1., 1., width), [1, width]), [height, 1])
-        y_t = tf.tile(tf.reshape(tf.linspace(- 1., 1., height), [height, 1]), [1, width])
+        x_t = tf.tile(
+            tf.reshape(tf.linspace(-1.0, 1.0, width), [1, width]), [height, 1]
+        )
+        y_t = tf.tile(
+            tf.reshape(tf.linspace(-1.0, 1.0, height), [height, 1]), [1, width]
+        )
 
         x_t_flat = tf.reshape(x_t, (1, 1, -1))
         y_t_flat = tf.reshape(y_t, (1, 1, -1))
@@ -202,11 +244,11 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
             off_x = tf.expand_dims(move[:, :, 1], axis=-1)
             scal_y = tf.expand_dims(tf.expand_dims(scal[:, 0], axis=-1), axis=-1)
             scal_x = tf.expand_dims(tf.expand_dims(scal[:, 1], axis=-1), axis=-1)
-            y = (y_s * scal_y + off_y)
-            x = (x_s * scal_x + off_x)
+            y = y_s * scal_y + off_y
+            x = x_s * scal_x + off_x
 
         else:
-            assert (move is None and scal is None)
+            assert move is None and scal is None
             y = y_s
             x = x_s
 
@@ -227,8 +269,9 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
         W = tf.concat([W_0, W_1], 1)  # [bn, pn+3, pn+3]
         W_inv = tf.matrix_inverse(W)
 
-        tp = tf.pad(coord + vector,
-                    [[0, 0], [0, 3], [0, 0]], "CONSTANT")  # [bn, pn+3, 2]
+        tp = tf.pad(
+            coord + vector, [[0, 0], [0, 3], [0, 0]], "CONSTANT"
+        )  # [bn, pn+3, 2]
         T = tf.matmul(W_inv, tp)  # [bn, pn+3, 2]
         T = tf.transpose(T, [0, 2, 1])  # [bn, 2, pn+3]
 
@@ -242,4 +285,3 @@ def ThinPlateSpline(U, coord, vector, out_size, n_c, move=None, scal=None):
     x = tf.reshape(x, [num_batch, out_height, out_width, 1])
     t_arr = tf.concat([y, x], axis=-1)
     return output, t_arr
-
