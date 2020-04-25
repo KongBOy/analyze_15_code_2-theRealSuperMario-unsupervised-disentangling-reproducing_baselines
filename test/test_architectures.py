@@ -13,20 +13,6 @@ sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentang
 
 
 class Test_Architectures:
-    def test_disriminator_patch(self):
-        import architectures
-
-        image = tf.ones((1, 49, 49, 3), dtype=tf.float32)
-
-        tf.random.set_random_seed(42)
-        probs1, logits1 = architectures.discriminator_patch(image, True)
-        tf.random.set_random_seed(42)
-        probs2, logits2 = architectures.Disicriminator_Patch({"batch_size": 1})(
-            image, True
-        )
-        assert np.allclose(probs1, probs2)
-        assert np.allclose(logits1, logits2)
-
     def test_decoder(self):
         import architectures
 
