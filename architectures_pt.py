@@ -23,7 +23,7 @@ class Decoder128(torch.nn.Module):
 
         self.layers = []
         channels_A = self.in_channels[0]
-        for in_c, F in zip(self.in_channels, self.n_filters):
+        for in_c, F in zip(self.in_channels[1:], self.n_filters):
             l = architecture_ops.NCCUC(
                 channels_A, channels_conv=F[0], channels_out=F[1]
             )
@@ -273,7 +273,7 @@ class Hourglass(torch.nn.Module):
 
 
 class Discriminator_Patch(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels=19):
         super().__init__()
 
         self.padding = "VALID"
@@ -288,22 +288,10 @@ class Discriminator_Patch(torch.nn.Module):
         ]
 
         self.convs = [
-            torch.nn.Conv2d(3, 32, 4, 1, padding=0),
+            torch.nn.Conv2d(in_channels, 32, 4, 1, padding=0),
             torch.nn.Conv2d(32, 64, 4, stride=2, padding=0),
             torch.nn.Conv2d(64, 128, 4, stride=2, padding=0),
-            torch.nn.Conv2d(128, 256, 4, stride=2, padding=0)
-            # tfk.layers.Conv2D(
-            #     32, 4, strides=1, padding=self.padding, activation=tf.nn.leaky_relu
-            # ),
-            # tfk.layers.Conv2D(
-            #     64, 4, strides=2, padding=self.padding, activation=tf.nn.leaky_relu
-            # ),
-            # tfk.layers.Conv2D(
-            #     128, 4, strides=2, padding=self.padding, activation=tf.nn.leaky_relu
-            # ),
-            # tfk.layers.Conv2D(
-            #     256, 4, strides=2, padding=self.padding, activation=tf.nn.leaky_relu
-            # ),
+            torch.nn.Conv2d(128, 256, 4, stride=2, padding=0),
         ]
         self.final_fc = torch.nn.Linear(4 * 4 * 256, 1, bias=False)
 
