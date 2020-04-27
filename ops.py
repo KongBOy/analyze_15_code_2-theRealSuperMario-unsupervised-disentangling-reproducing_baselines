@@ -626,12 +626,3 @@ def initialize_uninitialized(sess):
     print([str(i.name) for i in not_initialized_vars])  # only for testing
     if len(not_initialized_vars):
         sess.run(tf.variables_initializer(not_initialized_vars))
-
-
-# def torch_image_random_contrast(image, lower, upper, seed=None):
-#     contrast_factor = torch.distributions.uniform.Uniform(lower, upper).sample()
-#     for img in image:
-#         img_pil = TF.to_pil_image(image)
-#         img_transformed = TF.adjust_contrast(image, contrast_factor)
-#         img_transformed = TF.to_tensor(img_pil)
-#     return img_transformed
