@@ -1,32 +1,20 @@
-import torchvision
 import torch
 
-from ops_pt import (
+from src.torch.ops_pt import (
     get_features,
     part_map_to_mu_L_inv,
     feat_mu_to_enc,
-    fold_img_with_mu,
-    fold_img_with_L_inv,
     prepare_pairs,
     AbsDetJacobian,
-    augm_mu,
     get_img_slice_around_mu,
 )
 
-import ops_pt
-from utils import (
-    define_scope,
-    batch_colour_map,
-    tf_summary_feat_and_parts,
-    part_to_color_map,
-)
 from supermariopy.ptutils.tps import ThinPlateSpline, make_input_tps_param
-from architectures import decoder_map, encoder_map, discriminator_patch
 import tfpyth
 
 # from torchvision.transforms import functional as F
 from torch.nn import functional as F
-import architectures_pt
+from src.torch import architectures_pt, ops_pt
 from dotmap import DotMap
 
 

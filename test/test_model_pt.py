@@ -1,11 +1,6 @@
-import pytest
-from model import ModelArgs
+from src.tf.model import ModelArgs
 from supermariopy.ptutils import tps
-import tensorflow as tf
-import numpy as np
-import model_pt
-import architectures_pt
-import ops_pt
+from src.torch import ops_pt, model_pt
 import torch
 
 

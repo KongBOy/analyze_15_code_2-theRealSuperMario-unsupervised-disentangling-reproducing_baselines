@@ -2,14 +2,10 @@ import numpy as np
 
 
 import torch
-import torch.functional as F
 import tensorflow as tf
 
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import random_ops
 import tfpyth
-import ops
-import ops_pt
+from src.tf import ops
 
 from torchvision.transforms import functional as TF
 
@@ -149,14 +145,14 @@ def prepare_pairs(
             t_images = torch_reshape(t_images, shape=[bn // 2, 2, h, w, n_c])
         t_c_1_images = torch.stack(
             [
-                ops_pt.augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip)
+                augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip)
                 for t in t_images
             ],
             dim=0,
         )
         t_c_2_images = torch.stack(
             [
-                ops_pt.augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip)
+                augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip)
                 for t in t_images
             ],
             dim=0,

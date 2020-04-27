@@ -1,5 +1,5 @@
 import torch
-from ops_pt import fold_img_with_mu, fold_img_with_L_inv
+from src.torch.ops_pt import fold_img_with_mu, fold_img_with_L_inv
 
 
 def transform_loss(mu_t_1, mu_t_2):

@@ -1,9 +1,4 @@
-import pytest
-import numpy as np
-
-import torch
 import tensorflow as tf
-from supermariopy.ptutils import nn as smptnn
 from supermariopy.tfutils import nn as smtfnn
 import sys
 
@@ -14,7 +9,7 @@ sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentang
 
 class Test_Architectures:
     def test_decoder(self):
-        import architectures
+        from src.tf import architectures
 
         reconstr_dim = 128
         n_c = 3  # color dim
@@ -33,7 +28,7 @@ class Test_Architectures:
         C = 10
         x = tf.zeros((N, H, W, C))
 
-        import architectures
+        from src.tf import architectures
 
         n_downsampling = 3
         n_out = 64
@@ -47,7 +42,7 @@ class Test_Architectures:
         C = 10
         x = tf.zeros((N, H, W, C))
 
-        import architectures
+        from src.tf import architectures
 
         n_landmark = 12
         n_features = 128

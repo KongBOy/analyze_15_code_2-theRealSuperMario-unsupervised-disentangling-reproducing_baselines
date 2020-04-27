@@ -1,10 +1,4 @@
-import pytest
-import numpy as np
-
-import torch
 import tensorflow as tf
-from supermariopy.ptutils import nn as smptnn
-from supermariopy.tfutils import nn as smtfnn
 import sys
 
 sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentangling/")
@@ -14,7 +8,7 @@ sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentang
 
 class Test_ArchitectureOps:
     def test_nccuc(self):
-        import architecture_ops
+        from src.tf import architecture_ops
 
         N = 1
         H = 128
@@ -34,7 +28,7 @@ class Test_ArchitectureOps:
         assert list(x1.shape) == [1, 128, 128, 30]
 
     def test_conv_block(self):
-        import architecture_ops
+        from src.tf import architecture_ops
 
         N = 1
         H = 128

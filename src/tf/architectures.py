@@ -1,14 +1,7 @@
-from utils import wrappy
+from src.tf.utils import wrappy
 import tensorflow as tf
-from architecture_ops import _residual, _conv_bn_relu, _conv, nccuc
-from ops import softmax, get_features
-import tensorflow.keras as tfk
-import torch
-
-import architecture_ops
-
-import ops
-import ops_pt
+from src.tf.architecture_ops import _residual, _conv_bn_relu, _conv, nccuc
+from src.tf.ops import softmax
 
 
 @wrappy

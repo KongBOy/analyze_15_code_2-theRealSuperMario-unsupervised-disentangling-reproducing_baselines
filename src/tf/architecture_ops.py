@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from utils import wrappy
+from src.tf.utils import wrappy
 import torch
 
 

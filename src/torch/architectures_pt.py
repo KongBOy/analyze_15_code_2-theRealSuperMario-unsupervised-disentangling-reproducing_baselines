@@ -1,6 +1,6 @@
 import torch
-import architecture_ops
-import ops_pt
+from src.tf import architecture_ops
+from src.torch import ops_pt
 
 
 class Decoder128(torch.nn.Module):

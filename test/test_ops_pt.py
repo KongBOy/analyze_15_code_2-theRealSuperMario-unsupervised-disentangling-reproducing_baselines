@@ -1,9 +1,4 @@
-import pytest
 import tensorflow as tf
-import numpy as np
-from utils import wrappy
-from tensorflow.python.ops import math_ops
-from tensorflow.python.ops import random_ops
 import torch
 import tfpyth
 from dotmap import DotMap
@@ -12,8 +7,8 @@ import sys
 
 sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentangling/")
 # tf.enable_eager_execution()
-import ops
-import ops_pt
+from src.tf import ops
+from src.torch import ops_pt
 
 tf.enable_eager_execution()
 

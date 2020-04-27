@@ -1,9 +1,8 @@
 import tensorflow as tf
 import numpy as np
-from utils import wrappy
+from src.tf.utils import wrappy
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import random_ops
-import torch
 
 
 def AbsDetJacobian(batch_meshgrid):

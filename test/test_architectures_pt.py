@@ -1,20 +1,14 @@
-import pytest
-import numpy as np
-
 import torch
-import tensorflow as tf
 from supermariopy.ptutils import nn as smptnn
-from supermariopy.tfutils import nn as smtfnn
 
 import sys
 
 sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentangling/")
-from architecture_ops import nccuc
 
 
 class Test_Architectures_pt:
     def test_decoder128_pt(self):
-        import architectures_pt
+        from src.torch import architectures_pt
 
         reconstr_dim = 128
         n_c = 3  # color dim
@@ -22,7 +16,7 @@ class Test_Architectures_pt:
             torch.zeros((1, 128, 128 // (2 ** i), 128 // (2 ** i))) for i in range(6)
         ]
 
-        decoder = architectures_pt.Decoder128([128,] * 5, n_c)
+        decoder = architectures_pt.Decoder128([128, ] * 6, n_c)
         reconstruction = decoder(encoding_list)
         assert smptnn.shape_as_list(reconstruction) == [1, 3, 128, 128]
 
@@ -33,7 +27,7 @@ class Test_Architectures_pt:
         C = 64
         x = torch.zeros((N, C, H, W))
 
-        import architectures_pt
+        from src.torch import architectures_pt
 
         y = architectures_pt.Hourglass(C, 10, architectures_pt.Bottleneck, 1, 32, 3)(x)
         assert smptnn.shape_as_list(y) == [1, 10, 128, 128]
@@ -45,7 +39,7 @@ class Test_Architectures_pt:
         C = 10
         x = torch.zeros((N, C, H, W))
 
-        import architectures_pt
+        from src.torch import architectures_pt
 
         n_landmark = 12
         n_features = 128
@@ -64,8 +58,8 @@ class Test_Architectures_pt:
         C = 3
         x = torch.zeros((N, C, H, W))
 
-        import architectures_pt
+        from src.torch import architectures_pt
 
-        y_probs, y_logits = architectures_pt.Discriminator_Patch()(x)
+        y_probs, y_logits = architectures_pt.Discriminator_Patch(in_channels=3)(x)
         assert y_probs.shape == (1, 1)
         assert y_logits.shape == (1, 1)

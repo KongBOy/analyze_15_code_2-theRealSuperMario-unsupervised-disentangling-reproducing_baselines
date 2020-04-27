@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from ops import (
+from src.tf.ops import (
     get_features,
     part_map_to_mu_L_inv,
     feat_mu_to_enc,
@@ -8,21 +8,16 @@ from ops import (
     fold_img_with_L_inv,
     prepare_pairs,
     AbsDetJacobian,
-    augm_mu,
     get_img_slice_around_mu,
 )
-from utils import (
+from src.tf.utils import (
     define_scope,
     batch_colour_map,
     tf_summary_feat_and_parts,
     part_to_color_map,
 )
-from transformations import ThinPlateSpline, make_input_tps_param
-from architectures import decoder_map, encoder_map, discriminator_patch
-
-import torch
-
-import architectures
+from src.tf.transformations import ThinPlateSpline, make_input_tps_param
+from src.tf.architectures import decoder_map, encoder_map, discriminator_patch
 
 import dataclasses
 
