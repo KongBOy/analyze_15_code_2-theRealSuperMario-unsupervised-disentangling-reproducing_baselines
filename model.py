@@ -20,6 +20,9 @@ from utils import (
 from transformations import ThinPlateSpline, make_input_tps_param
 from architectures import decoder_map, encoder_map, discriminator_patch
 
+import torch
+
+import architectures
 
 import dataclasses
 
@@ -81,6 +84,7 @@ class ModelArgs:
     print_vars: bool = False
     lr: float = 0.0001
     lr_d: float = 0.0001
+    adversarial: bool = False
 
     # rec_stages
     # part_depths
@@ -136,7 +140,7 @@ class Model:
         self.heat_mask_l2, self.fold_img_squared = None, None
 
         # adverserial
-        self.adversarial = self.arg.adverserial
+        self.adversarial = self.arg.adversarial
         self.t_D, self.t_D_logits = None, None
         self.patches = None
 
@@ -191,8 +195,10 @@ class Model:
             self.mu_t = tf.einsum("aijk,aijl->akl", self.integrant, self.transform_mesh)
             transform_mesh_out_prod = tf.einsum(
                 "aijm,aijn->aijmn", self.transform_mesh, self.transform_mesh
-            )
-            mu_out_prod = tf.einsum("akm,akn->akmn", self.mu_t, self.mu_t)
+            )  # [2, 64, 64, 2, 2
+            mu_out_prod = tf.einsum(
+                "akm,akn->akmn", self.mu_t, self.mu_t
+            )  # [2, 16, 2, 2]
             self.stddev_t = (
                 tf.einsum("aijk,aijmn->akmn", self.integrant, transform_mesh_out_prod)
                 - mu_out_prod
@@ -458,4 +464,3 @@ class Model:
             tf_summary_feat_and_parts(
                 self.encoding_same_id, self.arg.part_depths, visualize_features=False
             )
-
