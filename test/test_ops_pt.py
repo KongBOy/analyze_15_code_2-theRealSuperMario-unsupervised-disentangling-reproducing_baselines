@@ -232,7 +232,6 @@ def test_precision_dist_op():
 
     out_tf = ops.precision_dist_op(circular_precision, dist, part_depth, nk, h, w)
 
-
     circular_precision_pt = torch.zeros((2, 16, 2, 2))
     dist_pt = torch.zeros((2, 16, 2, 16384))
     part_depth = 16
@@ -240,8 +239,9 @@ def test_precision_dist_op():
     h = 128
     w = 128
 
-    out_pt = ops_pt.precision_dist_op(circular_precision_pt, dist_pt, part_depth, nk, h, w)
-
+    out_pt = ops_pt.precision_dist_op(
+        circular_precision_pt, dist_pt, part_depth, nk, h, w
+    )
 
     assert np.allclose(out_tf[0], out_pt[0].numpy())
     assert np.allclose(out_tf[1], out_pt[1].numpy())

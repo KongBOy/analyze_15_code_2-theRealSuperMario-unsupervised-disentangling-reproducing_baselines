@@ -11,22 +11,14 @@ import tfpyth
 import ops
 import ops_pt
 
+from torchvision.transforms import functional as TF
+
 
 def AbsDetJacobian(batch_meshgrid):
-    return tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
-
-
-# return f(batch_meshgrid)
-""" batch_meshgrid in shape [bn, 2, h, w] """
-
-# b = channel_first_to_last(batch_meshgrid)
-# b_ph = tf.compat.v1.placeholder(tf.float32, name="batch_meshgrid_ph")
-# det = ops.AbsDetJacobian(b)
-# f = tfpyth.torch_from_tensorflow(tf.compat.v1.Session(), [b_ph], det).apply
-# out = f(b)
-# return out
-
-from torchvision.transforms import functional as TF
+    batch_meshgrid = tfpyth.th_2D_channels_first_to_last(batch_meshgrid).contiguous()
+    out = tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
+    out = tfpyth.th_2D_channels_last_to_first(out)
+    return out
 
 
 def torch_image_random_contrast(image, lower, upper, seed=None):
@@ -132,56 +124,75 @@ def Parity(t_images, t_mesh, on=False):
     return Pt_images, Pt_mesh
 
 
-def prepare_pairs(t_images, reconstr_dim, train, static):
+def prepare_pairs(
+    t_images,
+    reconstr_dim,
+    train,
+    static,
+    contrast_var,
+    brightness_var,
+    saturation_var,
+    hue_var,
+    p_flip,
+):
     if train:
-        bn, h, w, n_c = t_images.get_shape().as_list()
+        bn, h, w, n_c = list(t_images.shape)
         if static:
-            t_images = tf.concat(
+            t_images = torch.cat(
                 [
-                    tf.expand_dims(t_images[: bn // 2], axis=1),
-                    tf.expand_dims(t_images[bn // 2 :], axis=1),
+                    torch.unsqueeze(t_images[: bn // 2], dim=1),
+                    torch.unsqueeze(t_images[bn // 2 :], dim=1),
                 ],
                 axis=1,
             )
         else:
-            t_images = tf.reshape(t_images, shape=[bn // 2, 2, h, w, n_c])
-        t_c_1_images = tf.map_fn(lambda x: ops.augm(x, arg), t_images)
-        t_c_2_images = tf.map_fn(lambda x: ops.augm(x, arg), t_images)
+            t_images = torch_reshape(t_images, shape=[bn // 2, 2, h, w, n_c])
+        t_c_1_images = torch.stack(
+            [
+                ops_pt.augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip)
+                for t in t_images
+            ],
+            dim=0,
+        )
+        t_c_2_images = torch.stack(
+            [
+                ops_pt.augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip)
+                for t in t_images
+            ],
+            dim=0,
+        )
         a, b = (
-            tf.expand_dims(t_c_1_images[:, 0], axis=1),
-            tf.expand_dims(t_c_1_images[:, 1], axis=1),
+            torch.unsqueeze(t_c_1_images[:, 0], dim=1),
+            torch.unsqueeze(t_c_1_images[:, 1], dim=1),
         )
         c, d = (
-            tf.expand_dims(t_c_2_images[:, 0], axis=1),
-            tf.expand_dims(t_c_2_images[:, 1], axis=1),
+            torch.unsqueeze(t_c_2_images[:, 0], dim=1),
+            torch.unsqueeze(t_c_2_images[:, 1], dim=1),
         )
         if static:
-            t_input_images = tf.reshape(
-                tf.concat([a, d], axis=0), shape=[bn, h, w, n_c]
+            t_input_images = torch_reshape(
+                torch.cat([a, d], dim=0), shape=[bn, h, w, n_c]
             )
-            t_reconstr_images = tf.reshape(
-                tf.concat([c, b], axis=0), shape=[bn, h, w, n_c]
+            t_reconstr_images = torch_reshape(
+                torch.cat([c, b], dim=0), shape=[bn, h, w, n_c]
             )
         else:
-            t_input_images = tf.reshape(
-                tf.concat([a, d], axis=1), shape=[bn, h, w, n_c]
+            t_input_images = torch_reshape(
+                torch.cat([a, d], dim=1), shape=[bn, h, w, n_c]
             )
-            t_reconstr_images = tf.reshape(
-                tf.concat([c, b], axis=1), shape=[bn, h, w, n_c]
+            t_reconstr_images = torch_reshape(
+                torch.cat([c, b], dim=1), shape=[bn, h, w, n_c]
             )
-
-        t_input_images = tf.clip_by_value(t_input_images, 0.0, 1.0)
-        t_reconstr_images = tf.image.resize_images(
-            tf.clip_by_value(t_reconstr_images, 0.0, 1.0),
-            size=(reconstr_dim, reconstr_dim),
+        t_input_images = t_input_images.clamp(0.0, 1.0)
+        t_reconstr_images = torch.nn.functional.interpolate(
+            t_reconstr_images.clamp(0.0, 1.0), size=(reconstr_dim, reconstr_dim),
         )
 
     else:
-        t_input_images = tf.clip_by_value(t_images, 0.0, 1.0)
-        t_reconstr_images = tf.image.resize_images(
-            tf.clip_by_value(t_images, 0.0, 1.0), size=(reconstr_dim, reconstr_dim)
+        t_input_images = t_images.clamp(0.0, 1.0)
+        t_reconstr_images = troch.nn.functional.interpolate(
+            t_images.clamp(0.0, 1.0), size=(reconstr_dim, reconstr_dim)
         )
-
     return t_input_images, t_reconstr_images
 
 
@@ -384,7 +395,9 @@ def feat_mu_to_enc(
         ),
         [bn, nk, 1, 1],
     )
-    for dims, part_depth, feat_slice in zip(reconstruct_stages, part_depths, feat_map_depths):
+    for dims, part_depth, feat_slice in zip(
+        reconstruct_stages, part_depths, feat_map_depths
+    ):
         h, w = dims[0], dims[1]
 
         y_t = torch.unsqueeze(
@@ -433,9 +446,7 @@ def feat_mu_to_enc(
                 )
 
             else:
-                encoding_list.append(
-                    torch.cat([part_heat_circ, heat_feat_map], dim=-1)
-                )
+                encoding_list.append(torch.cat([part_heat_circ, heat_feat_map], dim=-1))
 
         else:
             if covariance:
@@ -445,7 +456,6 @@ def feat_mu_to_enc(
                 encoding_list.append(part_heat_circ)
 
     return encoding_list
-
 
 
 def heat_map_function(y_dist, x_dist, y_scale, x_scale):
@@ -472,7 +482,7 @@ def unary_mat(vector):
     return U_mat
 
 
-def get_img_slice_around_mu(img, mu, slice_size, h, w, nk):
+def get_img_slice_around_mu(img, mu, slice_size):
     # TODO: rewrite this in pytorch
     # import functools
 
