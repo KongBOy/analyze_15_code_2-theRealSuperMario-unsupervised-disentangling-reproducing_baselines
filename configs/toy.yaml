@@ -5,7 +5,7 @@ model: src.experiment.Model
 iterator: src.experiment.Iterator
 
 batch_size: 8
-spatial_size: 16
+spatial_size: 128
 
 lr: 1.0e-3
 lr_decay_begin: 1000
@@ -69,6 +69,11 @@ loss_params:
 
 
 integrations:
+  tensorboardX:
+    active: True
+    handlers:
+    - scalars
+    - images
   tensorboard:
     active: True
     handlers:

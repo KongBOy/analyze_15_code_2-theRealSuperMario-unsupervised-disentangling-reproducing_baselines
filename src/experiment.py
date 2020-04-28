@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import tensorflow as tf
 
 import numpy as np
 from edflow import TemplateIterator, get_logger
@@ -14,6 +15,7 @@ from dotmap import DotMap
 import warnings
 
 from supermariopy.ptutils import utils as ptu
+
 
 
 class Model(nn.Module):
@@ -34,10 +36,6 @@ class Model(nn.Module):
     def forward(self, x):
         out = self.net(x)
         return out
-
-    # def transfer(self, x):
-    #     # TODO
-    #     return imgs
 
 
 def split_batch(x):
@@ -60,10 +58,10 @@ class Iterator(TemplateIterator):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.model.lr)
         self.loss_params = DotMap(self.model.config["loss_params"])
 
-    @property
-    def callbacks(self):
-        # return {"eval_op": {"acc_callback": acc_callback}}
-        pass
+    # @property
+    # def callbacks(self):
+    #     # return {"eval_op": {"acc_callback": acc_callback}}
+    #     pass
 
     def save(self, checkpoint_path):
         state = {
@@ -158,9 +156,12 @@ class Iterator(TemplateIterator):
             return logs
 
         def eval_op():
-            model.eval()
-            eval_logs = {"outputs": {}, "labels": {}}  # eval_logs
-            return eval_logs
+            # pass
+            return {}
+            # model.eval()
+            # eval_logs = {"outputs": {}, "labels": {}}  # eval_logs
+            # # return eval_logs
+            # return 
 
         return {"train_op": train_op, "log_op": log_op, "eval_op": eval_op}
 

@@ -14,6 +14,7 @@ def AbsDetJacobian(batch_meshgrid):
     batch_meshgrid = tfpyth.th_2D_channels_first_to_last(batch_meshgrid).contiguous()
     out = tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
     out = tfpyth.th_2D_channels_last_to_first(out)
+    out = out.to(batch_meshgrid.device)
     return out
 
 
@@ -25,11 +26,14 @@ def torch_image_random_contrast(image, lower, upper, seed=None):
 def torch_image_adjust_contrast(image, contrast_factor):
     t_out = []
     for img in image:
+        if img.is_cuda:
+            img = img.cpu()
         img_pil = TF.to_pil_image(img)
         img_transformed = TF.adjust_contrast(img_pil, contrast_factor)
         img_transformed = TF.to_tensor(img_transformed)
         t_out.append(img_transformed)
     t_out = torch.stack(t_out, axis=0)
+    t_out = t_out.to(image.device)
     return t_out
 
 
@@ -41,11 +45,14 @@ def torch_image_random_brightness(image, max_delta, seed=None):
 def torch_image_adjust_brightness(image, delta):
     t_out = []
     for img in image:
+        if img.is_cuda:
+            img = img.cpu()
         img_pil = TF.to_pil_image(img)
         img_transformed = TF.adjust_brightness(img_pil, delta)
         img_transformed = TF.to_tensor(img_transformed)
         t_out.append(img_transformed)
     t_out = torch.stack(t_out, axis=0)
+    t_out = t_out.to(image.device)
     return t_out
 
 
@@ -57,27 +64,34 @@ def torch_image_random_saturation(image, lower, upper, seed=None):
 def torch_image_adjust_saturation(image, saturation_factor):
     t_out = []
     for img in image:
+        if img.is_cuda:
+            img = img.cpu()
         img_pil = TF.to_pil_image(img)
         img_transformed = TF.adjust_saturation(img_pil, saturation_factor)
         img_transformed = TF.to_tensor(img_transformed)
         t_out.append(img_transformed)
     t_out = torch.stack(t_out, axis=0)
+    t_out = t_out.to(image.device)
     return t_out
 
 
 def torch_image_random_hue(image, max_delta, seed=None):
     delta = torch.distributions.uniform.Uniform(-max_delta, max_delta).sample()
-    return torch_image_adjust_saturation(image, delta)
+    out = torch_image_adjust_saturation(image, delta)
+    return out
 
 
 def torch_image_adjust_hue(image, delta):
     t_out = []
     for img in image:
+        if img.is_cuda:
+            img = img.cpu()
         img_pil = TF.to_pil_image(img)
         img_transformed = TF.adjust_hue(img_pil, delta)
         img_transformed = TF.to_tensor(img_transformed)
         t_out.append(img_transformed)
     t_out = torch.stack(t_out, axis=0)
+    t_out = t_out.to(image.device)
     return t_out
 
 
@@ -87,7 +101,7 @@ def augm(t, contrast_var, brightness_var, saturation_var, hue_var, p_flip):
     t = torch_image_random_saturation(t, 1 - saturation_var, 1 + saturation_var)
     t = torch_image_random_hue(t, hue_var)
 
-    random_tensor = 1 - p_flip + torch.empty([1], dtype=t.dtype).uniform_()
+    random_tensor = 1 - p_flip + t.new_empty([1]).uniform_()
     binary_tensor = torch.floor(random_tensor)
     augmented = binary_tensor * t + (1 - binary_tensor) * (1 - t)
     return augmented
@@ -218,6 +232,14 @@ def random_scal(bn, min_scal, max_scal):
     return rand_scal
 
 
+def linspace(min_, max_, n, **kwargs):
+    t = torch.linspace(min_, max_, n, **kwargs)
+    if torch.cuda.is_available():
+        return t.cuda()
+    else:
+        return t
+
+
 def part_map_to_mu_L_inv(part_maps, scal):
     """
     Calculate mean for each channel of part_maps
@@ -225,8 +247,8 @@ def part_map_to_mu_L_inv(part_maps, scal):
     :return: mean calculated on a grid of scale [-1, 1]
     """
     bn, nk, h, w = list(part_maps.shape)
-    y_t = tile(torch.linspace(-1.0, 1.0, h).view([h, 1]), w, dim=1)
-    x_t = tile(torch.linspace(-1.0, 1.0, w).view([1, w]), h, dim=0)
+    y_t = tile(linspace(-1.0, 1.0, h).view([h, 1]), w, dim=1)
+    x_t = tile(linspace(-1.0, 1.0, w).view([1, w]), h, dim=0)
     y_t = torch.unsqueeze(y_t, dim=-1)
     x_t = torch.unsqueeze(x_t, dim=-1)
     meshgrid = torch.cat([y_t, x_t], dim=-1)
@@ -279,6 +301,7 @@ def tile(a, n_tile, dim):
     order_index = torch.LongTensor(
         np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])
     )
+    order_index = order_index.to(a.device)
     return torch.index_select(a, dim, order_index)
 
 
@@ -386,7 +409,8 @@ def feat_mu_to_enc(
     encoding_list = []
     circular_precision = tile_nd(
         torch_reshape(
-            torch.tensor([[range_, 0.0], [0, range_]], dtype=torch.float32),
+            torch.tensor([[range_, 0.0], [0, range_]], dtype=torch.float32,
+            device=features.device),
             shape=[1, 1, 2, 2],
         ),
         [bn, nk, 1, 1],
@@ -397,10 +421,10 @@ def feat_mu_to_enc(
         h, w = dims[0], dims[1]
 
         y_t = torch.unsqueeze(
-            tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, h), [h, 1]), [1, w]), dim=-1
+            tile_nd(torch_reshape(linspace(-1.0, 1.0, h), [h, 1]), [1, w]), dim=-1
         )
         x_t = torch.unsqueeze(
-            tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, w), [1, w]), [h, 1]), dim=-1
+            tile_nd(torch_reshape(linspace(-1.0, 1.0, w), [1, w]), [h, 1]), dim=-1
         )
 
         y_t_flat = torch_reshape(y_t, (1, 1, 1, -1))
@@ -545,8 +569,8 @@ def fold_img_with_mu(img, mu, scale, threshold, normalize=True):
     py = torch.unsqueeze(mu[:, :, 0], 2).detach()
     px = torch.unsqueeze(mu[:, :, 1], 2).detach()
 
-    y_t = tile_nd(torch_reshape(torch.linspace(-1, 1, h), [h, 1]), [1, w])
-    x_t = tile_nd(torch_reshape(torch.linspace(-1, 1, w), [1, w]), [h, 1])
+    y_t = tile_nd(torch_reshape(linspace(-1, 1, h), [h, 1]), [1, w])
+    x_t = tile_nd(torch_reshape(linspace(-1, 1, w), [1, w]), [h, 1])
 
     x_t_flat = torch_reshape(x_t, (1, 1, -1))
     y_t_flat = torch_reshape(y_t, (1, 1, -1))
@@ -585,8 +609,8 @@ def mu_img_gate(mu, resolution, scale):
     px = torch.unsqueeze(mu[:, :, 1], 2).detach()
 
     h, w = resolution
-    y_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, h), [h, 1]), [1, w])
-    x_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, w), [1, w]), [h, 1])
+    y_t = tile_nd(torch_reshape(linspace(-1.0, 1.0, h), [h, 1]), [1, w])
+    x_t = tile_nd(torch_reshape(linspace(-1.0, 1.0, w), [1, w]), [h, 1])
     x_t_flat = torch_reshape(x_t, (1, 1, -1))
     y_t_flat = torch.reshape(y_t, (1, 1, -1))
 
@@ -614,8 +638,8 @@ def fold_img_with_L_inv(img, mu, L_inv, scale, threshold, normalize=True):
 
     mu_stop = mu.detach()
 
-    y_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, h), [h, 1]), [1, w])
-    x_t = tile_nd(torch_reshape(torch.linspace(-1.0, 1.0, w), [1, w]), [h, 1])
+    y_t = tile_nd(torch_reshape(linspace(-1.0, 1.0, h), [h, 1]), [1, w])
+    x_t = tile_nd(torch_reshape(linspace(-1.0, 1.0, w), [1, w]), [h, 1])
     x_t_flat = torch_reshape(x_t, (1, 1, -1))
     y_t_flat = torch_reshape(y_t, (1, 1, -1))
 

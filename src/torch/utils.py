@@ -8,7 +8,7 @@ def batch_colour_map(heat_map):
     color = []
     for i in range(c):
         color.append(cm.hsv(float(i / c))[:3])
-    color = torch.tensor(color)
+    color = torch.tensor(color).to(heat_map.device)
     color_map = torch.einsum("bkij,kl->blij", heat_map, color)
     return color_map
 
