@@ -14,7 +14,7 @@ import tfpyth
 
 # from torchvision.transforms import functional as F
 from torch.nn import functional as F
-from src.torch import architectures_pt, ops_pt
+from src.torch import architectures_pt, ops_pt, utils
 from dotmap import DotMap
 
 
@@ -45,6 +45,8 @@ class Model(torch.nn.Module):
         saturation_var,
         hue_var,
         p_flip,
+        l_2_scal,
+        l_2_threshold,
     ):
         super(Model, self).__init__()
         self.tps_par = tps_par
@@ -78,6 +80,8 @@ class Model(torch.nn.Module):
         self.p_flip = p_flip
         if self.adversarial:
             self.discriminator = architectures_pt.Discriminator_Patch()
+        self.l_2_threshold = l_2_threshold
+        self.l_2_scal = l_2_scal
 
     def forward(self, x):
         image_orig = x
@@ -151,6 +155,7 @@ class Model(torch.nn.Module):
             "mu_t": mu_t,
             "stddev_t": stddev_t,
             "reconstruct_same_id": reconstruct_same_id,
+            "encoding_same_id": encoding_same_id,
         }
 
         if self.adversarial:
@@ -188,3 +193,43 @@ class Model(torch.nn.Module):
 
         return outputs
 
+
+def make_visualizations(out, model, heat_mask_l2):
+    visualizations = {}
+
+    visualizations["g_reconstr"] = out.image_rec
+    normal = utils.part_to_color_map(
+        out.encoding_same_id, model.part_depths, size=model.in_dim
+    )
+    normal = normal / (1 + torch.sum(normal, dim=1, keepdim=True))
+    vis_normal = torch.where(
+        ops_pt.tile_nd(torch.sum(normal, dim=1, keepdim=True), [1, 3, 1, 1]) > 0.3,
+        normal,
+        out.image_in,
+    )
+    heat_mask_l2 = torch.nn.functional.interpolate(
+        ops_pt.tile_nd(heat_mask_l2, [1, 3, 1, 1]), size=(model.in_dim, model.in_dim),
+    )
+    vis_normal = torch.where(
+        heat_mask_l2 > model.l_2_threshold, vis_normal, 0.3 * vis_normal
+    )
+    visualizations["gt_t_1"] = vis_normal[: model.bn, ...]
+    visualizations["gt_t_2"] = vis_normal[model.bn :, ...]
+    visualizations["part_maps_t_1"] = utils.batch_colour_map(
+        out.part_maps[: model.bn, ...]
+    )
+    visualizations["part_maps_t_2"] = utils.batch_colour_map(
+        out.part_maps[model.bn :, ...]
+    )
+
+    if model.adversarial:
+        f_dim = 2 * model.bn * model.n_parts
+        visualizations["patch_real"] = out.patches[:f_dim, : model.n_c, :, :]
+        visualizations["patch_fake"] = out.patches[
+            f_dim : f_dim + f_dim // 2, : model.n_c, :, :
+        ]
+        visualizations["same_id_reconstruction"] = out.reconstruct_same_id
+        visualizations["same_id_reconstruction"] = utils.summary_feat_and_parts(
+            out.encoding_list, model.part_depths, False
+        )
+    return visualizations
