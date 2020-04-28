@@ -1,9 +1,6 @@
 import argparse
-import json
-from dataloading import dataset_map_train
-from architectures import decoder_map, encoder_map
-
-import tensorflow as tf
+from src.tf.dataloading import dataset_map_train
+from src.tf.architectures import decoder_map, encoder_map
 
 
 def parse_args():

@@ -1,11 +1,11 @@
 import os
-from dataloading import load_and_preprocess_image, dataset_map_train, dataset_map_test
-from transformations import tps_parameters
+from src.tf.dataloading import load_and_preprocess_image, dataset_map_train, dataset_map_test
+from src.tf.transformations import tps_parameters
 from dotmap import DotMap
 import numpy as np
 from config import parse_args, write_hyperparameters
-from model import Model
-from utils import (
+from src.tf.model import Model
+from src.tf.utils import (
     save_python_files,
     transformation_parameters,
     find_ckpt,
