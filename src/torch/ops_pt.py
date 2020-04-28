@@ -186,7 +186,7 @@ def prepare_pairs(
 
     else:
         t_input_images = t_images.clamp(0.0, 1.0)
-        t_reconstr_images = troch.nn.functional.interpolate(
+        t_reconstr_images = torch.nn.functional.interpolate(
             t_images.clamp(0.0, 1.0), size=(reconstr_dim, reconstr_dim)
         )
     return t_input_images, t_reconstr_images
