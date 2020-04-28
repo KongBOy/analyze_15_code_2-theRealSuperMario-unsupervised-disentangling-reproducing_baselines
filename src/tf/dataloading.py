@@ -182,5 +182,13 @@ def load_test_from_csv(
     return raw_dataset
 
 
-dataset_map_train = {"generic": load_train_generic, "human3m": load_train_human3m}
-dataset_map_test = {"generic": load_test_generic, "human3m": load_test_human3m}
+dataset_map_train = {
+    "generic": load_train_generic,
+    "human3m": load_train_human3m,
+    "csv": load_train_from_csv,
+}
+dataset_map_test = {
+    "generic": load_test_generic,
+    "human3m": load_test_human3m,
+    "csv": load_test_from_csv,
+}
