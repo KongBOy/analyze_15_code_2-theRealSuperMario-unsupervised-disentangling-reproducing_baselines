@@ -1,0 +1,78 @@
+datasets: 
+  train: src.torch.dataloading_pt.Toy_StochasticPairs
+  validation: src.torch.dataloading_pt.Toy_StochasticPairs
+model: src.experiment.Model
+iterator: src.experiment.Iterator
+
+batch_size: 8
+spatial_size: 16
+
+lr: 1.0e-3
+lr_decay_begin: 1000
+lr_decay_end: 100000
+log_freq: 250
+ckpt_freq: 1000
+num_steps: 1000001
+
+
+dropout_prob: 0.0
+
+model_params:
+  heat_dim: 64
+  nFeat_1: 256
+  nFeat_2: 256
+  L_inv_scal: 0.8
+  rec_stages: [
+        [128, 128],
+        [64, 64],
+        [32, 32],
+        [16, 16],
+        [8, 8],
+        [4, 4],
+    ]  # 128x128 model
+  part_depths: [
+        16,
+        16,
+        16,
+        16,
+        4,
+        2,
+    ]
+  feat_slices: [[0, 0], [0, 0], [0, 0], [4, 16], [2, 4], [0, 2]]
+  covariance: True
+  average_features_mode: False
+  heat_feat_normalize: True
+  static: True
+  reconstr_dim: 128
+  n_c: 3  
+  bn: 8
+  n_parts: 16
+  adversarial: False
+  patch_size: [49, 49]
+  in_dim: 128
+  contrast_var: 0.5
+  brightness_var: 0.3
+  saturation_var: 0.1
+  hue_var: 0.3
+  p_flip: 0.0
+  l_2_scal: 0.1
+  l_2_threshold: 0.2
+
+
+# TODO: look up actual values
+loss_params:
+  lambda_t: 5
+  lambda_p: 0.1
+  lambda_r: 1
+  lambda_g: 0.0002 # generator adversarial loss
+
+
+
+integrations:
+  tensorboard:
+    active: True
+    handlers:
+    - scalars
+    - images
+  wandb:
+    active: False
