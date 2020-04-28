@@ -54,7 +54,6 @@ class Decoder128(torch.nn.Module):
         A = x_list_reverse[0]
         for l, B in zip(self.layers, x_list_reverse[1:]):
             A = l(A, B)
-            print(A.shape)
 
         A = torch.nn.ConstantPad2d(padding=(2, 3, 3, 2), value=0)(
             A
