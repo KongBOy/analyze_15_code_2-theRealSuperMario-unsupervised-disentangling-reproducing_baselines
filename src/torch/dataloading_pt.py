@@ -3,7 +3,10 @@ from torch.utils.data import Dataset
 import glob
 import numpy as np
 import random
-from edflow.data.util import edu.DatasetMixin
+from edflow.iterators.batches import DatasetMixin
+import skimage
+import cv2
+
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -38,14 +41,16 @@ class Human3M_Dataset(Dataset):
         return self.frames[i]
 
 
-class Toy_StochasticPairs(edu.DatasetMixin):
-    def __init__(self):
+class Toy_StochasticPairs(DatasetMixin):
+    def __init__(self, config):
         super(Toy_StochasticPairs, self)
 
     def get_example(self, i):
-        a = np.zeros((128, 128, 3))
-        b = np.zeros((128, 128, 3))
-        example = {"a": a, "b": b}
+        a = skimage.data.astronaut()
+        # a = skimage.transform.resize(a, (128, 128))
+        a = cv2.resize(a, (128, 128))
+        b = a.copy()
+        example = {"image_in": a, "image_rec": b}
         return example
 
     def __len__(self):
