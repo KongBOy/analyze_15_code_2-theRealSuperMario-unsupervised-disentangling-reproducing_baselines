@@ -31,7 +31,6 @@ class Model(torch.nn.Module):
         covariance,
         average_features_mode,
         heat_feat_normalize,
-        static,
         reconstr_dim,
         n_c,
         bn,
@@ -56,7 +55,6 @@ class Model(torch.nn.Module):
         self.covariance = covariance
         self.average_features_mode = average_features_mode
         self.heat_feat_normalize = heat_feat_normalize
-        self.static = static
         self.reconstr_dim = reconstr_dim
         self.n_c = n_c
         self.bn = bn
