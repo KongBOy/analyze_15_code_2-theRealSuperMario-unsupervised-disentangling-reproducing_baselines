@@ -70,7 +70,7 @@ def torch_image_adjust_contrast(image, contrast_factor):
 
 
 def torch_image_random_brightness(image, max_delta, seed=None):
-    delta = torch.distributions.uniform.Uniform(-max_delta, max_delta).sample()
+    delta = torch.distributions.uniform.Uniform(1 - max_delta, 1 + max_delta).sample()
     return torch_image_adjust_brightness(image, delta)
 
 
@@ -109,7 +109,7 @@ def torch_image_adjust_saturation(image, saturation_factor):
 
 def torch_image_random_hue(image, max_delta, seed=None):
     delta = torch.distributions.uniform.Uniform(-max_delta, max_delta).sample()
-    out = torch_image_adjust_saturation(image, delta)
+    out = torch_image_adjust_hue(image, delta)
     return out
 
 
