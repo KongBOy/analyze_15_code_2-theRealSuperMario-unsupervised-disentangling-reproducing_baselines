@@ -15,7 +15,7 @@ from dotmap import DotMap
 import warnings
 
 from supermariopy.ptutils import utils as ptu
-
+from src.torch import ops_pt
 
 
 class Model(nn.Module):
@@ -23,15 +23,14 @@ class Model(nn.Module):
         super().__init__()
 
         self.config = config
+        self.config = DotMap(config)
         self.model_args = DotMap(config["model_params"])
 
         self.spatial_size = config["spatial_size"]
         self.batch_size = config["batch_size"]
         self.lr = config["lr"]
-        tps_params = tps.no_transformation_parameters(2 * self.batch_size)
-        tps_param_dic = tps.tps_parameters(**tps_params)
 
-        self.net = model_pt.Model(tps_par=tps_param_dic, **self.model_args)
+        self.net = model_pt.Model(**self.model_args)
 
     def forward(self, x):
         out = self.net(x)
@@ -50,18 +49,13 @@ class Iterator(TemplateIterator):
             self.device = torch.device("cuda")
         else:
             self.device = torch.device("cpu")
-
         self.model = self.model.to(self.device)
+        self.config = self.model.config
         # self.vgg_loss = ptlosses.VGGLossWithL1(0, l1_alpha=1.0e-3)
         # self.vgg_loss = self.vgg_loss.to(self.device)
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.model.lr)
-        self.loss_params = DotMap(self.model.config["loss_params"])
-
-    # @property
-    # def callbacks(self):
-    #     # return {"eval_op": {"acc_callback": acc_callback}}
-    #     pass
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config.lr)
+        self.loss_params = self.model.config.loss_params
 
     def save(self, checkpoint_path):
         state = {
@@ -78,28 +72,58 @@ class Iterator(TemplateIterator):
     def step_op(self, model, **kwargs):
         # get inputs
 
-        image_in = kwargs["image_in"]
-        image_rec = kwargs["image_rec"]
-        image_in = to_torch(image_in, permute=True)
-        image_in = ptcompat.torch_tile_nd(image_in, [2, 1, 1, 1])
-        image_rec = to_torch(image_rec, permute=True)
+        x = kwargs["image_in"]
+        x = to_torch(x, permute=True)
+        image_batch_tiled = ptcompat.torch_tile_nd(x, [2, 1, 1, 1])
 
         def train_op():
             # compute losses and run optimization
             model.train()
+
+            # prepare tps
+            tps_params = self.config.tps_params
+            tps_params["batch_size"] = 2 * self.config.batch_size
+            tps_param_dic = tps.tps_parameters(**tps_params)
+            coord, vector = tps.make_input_tps_param(tps_param_dic)
+            t_images, t_mesh = tps.ThinPlateSpline(
+                image_batch_tiled,
+                coord,
+                vector,
+                self.config.model_params.in_dim,
+                self.config.model_params.n_c,
+            )
+            image_in, image_rec = ops_pt.prepare_pairs(
+                t_images,
+                self.config.model_params.reconstr_dim,
+                train=True,
+                static=False,
+                contrast_var=self.config.contrast_var,
+                brightness_var=self.config.brightness_var,
+                saturation_var=self.config.saturation_var,
+                hue_var=self.config.hue_var,
+                p_flip=self.config.p_flip,
+            )
             out = model(image_in)
-            mu_t_1, mu_t_2 = split_batch(out.mu)
-            stddev_t_1, stddev_t_2 = split_batch(out.stddev_t)
+
+            mu = out.mu
+            part_maps = out.part_maps
+            transform_mesh = F.interpolate(
+                t_mesh,
+                (self.config.model_params.heat_dim, self.config.model_params.heat_dim),
+            )
+            mu_t_1, mu_t_2, stddev_t_1, stddev_t_2 = propagate_mu_L(
+                transform_mesh, part_maps
+            )
 
             transform_loss_val = losses_pt.transform_loss(mu_t_1, mu_t_2)
             precision_loss_val = losses_pt.precision_loss(stddev_t_1, stddev_t_2)
             l2_loss, heat_mask_l2 = losses_pt.reconstruction_loss(
                 out.reconstruct_same_id,
-                out.image_rec,
+                image_rec,
                 out.mu.detach(),
                 out.L_inv.detach(),
-                self.model.model_args.l_2_scal,
-                self.model.model_args.l_2_threshold,
+                self.config.model_params.l_2_scal,
+                self.config.model_params.l_2_threshold,
             )
 
             total_loss = (
@@ -115,19 +139,53 @@ class Iterator(TemplateIterator):
         def log_op():
             # calculate logs every now and then
             model.eval()
+
+            # prepare tps
+            tps_params = self.config.tps_params
+            tps_params["batch_size"] = 2 * self.config.batch_size
+
+            # TODO: replace with actual tps sampling
+            tps_param_dic = tps.tps_parameters(**tps_params)
+            coord, vector = tps.make_input_tps_param(tps_param_dic)
+            t_images, t_mesh = tps.ThinPlateSpline(
+                image_batch_tiled,
+                coord,
+                vector,
+                self.config.model_params.in_dim,
+                self.config.model_params.n_c,
+            )
+            image_in, image_rec = ops_pt.prepare_pairs(
+                t_images,
+                self.config.model_params.reconstr_dim,
+                train=True,  # train applies augmentation transforms
+                static=False,
+                contrast_var=self.config.contrast_var,
+                brightness_var=self.config.brightness_var,
+                saturation_var=self.config.saturation_var,
+                hue_var=self.config.hue_var,
+                p_flip=self.config.p_flip,
+            )
             out = model(image_in)
-            mu_t_1, mu_t_2 = split_batch(out.mu)
-            stddev_t_1, stddev_t_2 = split_batch(out.stddev_t)
+
+            mu = out.mu
+            part_maps = out.part_maps
+            transform_mesh = F.interpolate(
+                t_mesh,
+                (self.config.model_params.heat_dim, self.config.model_params.heat_dim),
+            )
+            mu_t_1, mu_t_2, stddev_t_1, stddev_t_2 = propagate_mu_L(
+                transform_mesh, part_maps
+            )
 
             transform_loss_val = losses_pt.transform_loss(mu_t_1, mu_t_2)
             precision_loss_val = losses_pt.precision_loss(stddev_t_1, stddev_t_2)
             l2_loss, heat_mask_l2 = losses_pt.reconstruction_loss(
                 out.reconstruct_same_id,
-                out.image_rec,
+                image_rec,
                 out.mu.detach(),
                 out.L_inv.detach(),
-                self.model.model_args.l_2_scal,
-                self.model.model_args.l_2_threshold,
+                self.config.model_params.l_2_scal,
+                self.config.model_params.l_2_threshold,
             )
 
             total_loss = (
@@ -143,7 +201,20 @@ class Iterator(TemplateIterator):
                 "loss_l2": l2_loss,
                 "loss_total": total_loss,
             }
-            visualizations = model_pt.make_visualizations(out, model.net, heat_mask_l2)
+
+            visualizations = model_pt.make_visualizations(
+                out,
+                image_in,
+                image_rec,
+                heat_mask_l2,
+                self.config.model_params.l_2_threshold,
+                self.config.model_params.in_dim,
+                self.config.model_params.part_depths,
+                self.config.model_params.n_c,
+                self.config.model_params.n_parts,
+                self.config.model_params.bn,
+                self.config.model_params.adversarial,
+            )
 
             logs["scalars"].update(scalar_logs)
             logs["images"].update(visualizations)
@@ -161,12 +232,33 @@ class Iterator(TemplateIterator):
             # model.eval()
             # eval_logs = {"outputs": {}, "labels": {}}  # eval_logs
             # # return eval_logs
-            # return 
+            # return
 
         return {"train_op": train_op, "log_op": log_op, "eval_op": eval_op}
 
+        # TODO: perceptual loss
 
-# TODO: perceptual loss
+
+def propagate_mu_L(transform_mesh, part_maps):
+    volume_mesh = ops_pt.AbsDetJacobian(transform_mesh)
+
+    integrant = torch.squeeze(
+        torch.unsqueeze(part_maps, dim=-1) * torch.unsqueeze(volume_mesh, dim=-1)
+    )
+    integrant = integrant / torch.sum(integrant, dim=[2, 3], keepdims=True)
+    mu_t = torch.einsum("akij,alij->akl", integrant, transform_mesh)
+    transform_mesh_out_prod = torch.einsum(
+        "amij,anij->aijmn", transform_mesh, transform_mesh
+    )
+    mu_out_prod = torch.einsum("akm,akn->akmn", mu_t, mu_t)
+    stddev_t = (
+        torch.einsum("akij,aijmn->akmn", integrant, transform_mesh_out_prod)
+        - mu_out_prod
+    )  # [2, 16, 2, 2]
+
+    mu_t_1, mu_t_2 = split_batch(mu_t)
+    stddev_t_1, stddev_t_2 = split_batch(stddev_t)
+    return mu_t_1, mu_t_2, stddev_t_1, stddev_t_2
 
 
 def to_numpy(x):
