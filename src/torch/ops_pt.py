@@ -714,7 +714,7 @@ def spatial_softmax(logit_map):
     m, _ = torch.max(logit_map, dim=3, keepdim=True)
     m, _ = torch.max(m, dim=2, keepdim=True)
     exp = torch.exp(logit_map - m)
-    norm = torch.sum(exp, dim=[1, 2], keepdims=True) + eps
+    norm = torch.sum(exp, dim=[2, 3], keepdims=True) + eps
     sm = exp / norm
     return sm
 
