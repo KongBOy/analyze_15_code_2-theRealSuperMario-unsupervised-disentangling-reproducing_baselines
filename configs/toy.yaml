@@ -4,7 +4,7 @@ datasets:
 model: src.experiment.Model
 iterator: src.experiment.Iterator
 
-batch_size: 8
+batch_size: 24
 spatial_size: 128
 
 lr: 1.0e-3
@@ -45,18 +45,31 @@ model_params:
   static: True
   reconstr_dim: 128
   n_c: 3  
-  bn: 8
+  bn: 24
   n_parts: 16
   adversarial: False
   patch_size: [49, 49]
   in_dim: 128
-  contrast_var: 0.5
-  brightness_var: 0.3
-  saturation_var: 0.1
-  hue_var: 0.3
-  p_flip: 0.0
   l_2_scal: 0.1
   l_2_threshold: 0.2
+
+
+
+tps_params:
+  scal: 0.8
+  tps_scal: 0.05
+  rot_scal: 0.1
+  off_scal: 0.15
+  scal_var: 0.05
+  augm_scal: 1.0
+
+
+# for prepare pairs
+contrast_var: 0.5
+brightness_var: 0.3
+saturation_var: 0.1
+hue_var: 0.3
+p_flip: 0.0
 
 
 # TODO: look up actual values
