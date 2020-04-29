@@ -82,7 +82,7 @@ def test_AbsDetJacobian():
     f_tf = ops.AbsDetJacobian
     args_tf = (tf.ones((1, 128, 128, 2)),)
     f_pt = ops_pt.AbsDetJacobian
-    args_pt = (torch.ones((1, 128, 128, 2)),)
+    args_pt = (torch.ones((1, 2, 128, 128)),)
     assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
 
 
