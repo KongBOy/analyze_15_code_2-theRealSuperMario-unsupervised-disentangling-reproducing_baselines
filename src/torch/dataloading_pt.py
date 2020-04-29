@@ -6,7 +6,8 @@ import random
 from edflow.iterators.batches import DatasetMixin
 import skimage
 import cv2
-cv2.setNumThreads(0)
+
+# cv2.setNumThreads(0)
 # https://docs.chainer.org/en/stable/reference/generated/chainer.iterators.MultiprocessIterator.html
 
 
@@ -45,10 +46,13 @@ class Human3M_Dataset(Dataset):
 
 class Toy_StochasticPairs(DatasetMixin):
     def __init__(self, config):
-        super(Toy_StochasticPairs, self)
+        super(Toy_StochasticPairs, self).__init__()
 
     def get_example(self, i):
-        a = cv2.imread("/export/home/sabraun/anaconda3/envs/computervisionbaselines/lib/python3.7/site-packages/skimage/data/astronaut.png", -1)
+        a = cv2.imread(
+            "/export/home/sabraun/anaconda3/envs/computervisionbaselines/lib/python3.7/site-packages/skimage/data/astronaut.png",
+            -1,
+        )
         a = cv2.cvtColor(a, cv2.COLOR_RGB2BGR)
         # a = skimage.transform.resize(a, (128, 128))
         a = cv2.resize(a, (128, 128)) / 255.0
@@ -58,3 +62,29 @@ class Toy_StochasticPairs(DatasetMixin):
 
     def __len__(self):
         return 1000
+
+
+class Toy_Human3m(DatasetMixin):
+    def __init__(self, config):
+        super(Toy_Human3m, self).__init__()
+
+        self.paths = (
+            sorted(
+                glob.glob(
+                    "/export/home/sabraun/code/unsupervised-disentangling/datasets/toy_human3m/*.jpg"
+                )
+            )
+            * 100
+        )
+
+    def get_example(self, i):
+        p = self.paths[i]
+        a = cv2.imread(p, -1,)
+        a = cv2.cvtColor(a, cv2.COLOR_RGB2BGR)
+        # a = skimage.transform.resize(a, (128, 128))
+        a = cv2.resize(a, (128, 128)) / 255.0
+        example = {"image_in": a, "image_rec": a}
+        return example
+
+    def __len__(self):
+        return len(self.paths)
