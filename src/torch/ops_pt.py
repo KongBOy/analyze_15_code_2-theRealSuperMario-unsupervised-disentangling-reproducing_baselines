@@ -11,11 +11,43 @@ from torchvision.transforms import functional as TF
 
 
 def AbsDetJacobian(batch_meshgrid):
-    batch_meshgrid = tfpyth.th_2D_channels_first_to_last(batch_meshgrid).contiguous()
-    out = tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
-    out = tfpyth.th_2D_channels_last_to_first(out)
-    out = out.to(batch_meshgrid.device)
-    return out
+    # batch_meshgrid = tfpyth.th_2D_channels_first_to_last(batch_meshgrid).contiguous()
+    # out = tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
+    # out = tfpyth.th_2D_channels_last_to_first(out)
+    # out = out.to(batch_meshgrid.device)
+    # return out
+
+
+    """
+    :param batch_meshgrid: takes meshgrid tensor of dim [bn, h, w, 2] (conceptually meshgrid represents a two dimensional function f = [fx, fy] on [bn, h, w] )
+    :return: returns Abs det of  Jacobian of f of dim [bn, h, w, 1 ]
+    """
+    y_c = torch.unsqueeze(batch_meshgrid[:, 0, :, :], 1)
+    x_c = torch.unsqueeze(batch_meshgrid[:, 1, :, :], 1)
+    sobel_x = 1 / 4 * torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=batch_meshgrid.device)
+    sobel_x_filter = sobel_x.view((1, 1, 3, 3))
+    sobel_y_filter = sobel_x_filter.permute((0, 1, 3, 2))
+
+
+    filtered_y_y = torch.nn.functional.conv2d(
+        y_c, sobel_y_filter, stride=1
+    )
+    filtered_y_x = torch.nn.functional.conv2d(
+        y_c, sobel_x_filter, stride=1
+    )
+    filtered_x_y = torch.nn.functional.conv2d(
+        x_c, sobel_y_filter, stride=1
+    )
+    filtered_x_x = torch.nn.functional.conv2d(
+        x_c, sobel_x_filter, stride=1
+    )
+
+    Det = torch.abs(filtered_y_y * filtered_x_x - filtered_y_x * filtered_x_y)
+    pad = (1, 1, 1, 1, 0, 0) # pad by  (1, 1), (1, 1, ) ( 0, 0)
+    Det = torch.nn.functional.pad(Det, pad, mode="constant")
+
+    return Det
+
 
 
 def torch_image_random_contrast(image, lower, upper, seed=None):
@@ -215,7 +247,7 @@ def reverse_batch(tensor, n_reverse):
     assert (bn / n_reverse).is_integer()
     tensor = torch_reshape(tensor, shape=[bn // n_reverse, n_reverse, *rest])
     idx = [i for i in range(n_reverse - 1, -1, -1)]
-    idx = torch.LongTensor(idx)
+    idx = torch.LongTensor(idx).to(tensor.device)
     # tensor_rev = tensor[:, ::-1]
     tensor_rev = tensor.index_select(1, idx)
     tensor_rev = torch_reshape(tensor_rev, shape=[bn, *rest])
