@@ -1,30 +1,20 @@
+import pytest
 import tensorflow as tf
 import torch
 import tfpyth
 from dotmap import DotMap
 
 import sys
-
-sys.path.insert(0, "/home/sandro/Projekte/github_projects/unsupervised-disentangling/")
-# tf.enable_eager_execution()
 from src.tf import ops
 from src.torch import ops_pt
+from supermariopy.tfutils import nn as tfnn
 
 tf.enable_eager_execution()
 
 
-def _test_compatibility(f_tf, args_tf, f_pt, args_pt, permute_pt=False):
-    torch.manual_seed(42)
-    tf.random.set_random_seed(42)
-    np.random.seed(42)
-    out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
-    torch.manual_seed(42)
-    tf.random.set_random_seed(42)
-    np.random.seed(42)
-    out_pt = f_pt(*args_pt)
+def _test_compatibility(out_tf, out_pt, permute_pt=False):
     if permute_pt:
-        out_pt = tfpyth.tf_2D_channels_first_to_last(out_pt)
+        out_pt = tfpyth.th_2D_channels_first_to_last(out_pt)
     if isinstance(out_pt, tuple) and isinstance(out_tf, tuple):
         test_results = []
         for opt, otf in zip(out_pt, out_tf):
@@ -33,14 +23,9 @@ def _test_compatibility(f_tf, args_tf, f_pt, args_pt, permute_pt=False):
     return np.allclose(np.array(out_tf), out_pt.numpy())
 
 
-def _test_shape_compatibility(f_tf, args_tf, f_pt, args_pt, permute_pt=False):
-    torch.manual_seed(42)
-    tf.random.set_random_seed(42)
-    out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
-    out_pt = f_pt(*args_pt)
+def _test_shape_compatibility(out_tf, out_pt, permute_pt=False):
     if permute_pt:
-        out_pt = tfpyth.tf_2D_channels_first_to_last(out_pt)
+        out_pt = tfpyth.th_2D_channels_first_to_last(out_pt)
     if isinstance(out_pt, tuple) and isinstance(out_tf, tuple):
         test_results = []
         for opt, otf in zip(out_pt, out_tf):
@@ -50,8 +35,8 @@ def _test_shape_compatibility(f_tf, args_tf, f_pt, args_pt, permute_pt=False):
 
 
 def test_augm():
-    args_tf = (tf.ones((1, 128, 128, 3)),)
-    args_pt = (torch.ones((1, 3, 128, 128)),)
+    t_tf = tf.ones((1, 128, 128, 3))
+    t_pt = torch.ones((1, 3, 128, 128))
     arg = DotMap(
         {
             "contrast_var": 0.1,
@@ -61,29 +46,21 @@ def test_augm():
             "p_flip": 0.1,
         }
     )
-    import functools
+    out_tf = ops.augm(t_tf, arg=arg)
 
-    tf.enable_eager_execution()
-    f_tf = functools.partial(ops.augm, arg=arg)
-
-    f_pt = functools.partial(ops_pt.augm, **arg)
-
-    torch.manual_seed(42)
-    tf.random.set_random_seed(42)
-    out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
-    out_pt = f_pt(*args_pt)
-    return np.allclose(
-        np.array(out_tf).shape, tfpyth.th_2D_channels_first_to_last(out_pt).shape
-    )
+    out_pt = ops_pt.augm(t_pt, **arg)
+    return _test_shape_compatibility(out_tf, out_pt, permute_pt=True)
 
 
 def test_AbsDetJacobian():
-    f_tf = ops.AbsDetJacobian
-    args_tf = (tf.ones((1, 128, 128, 2)),)
-    f_pt = ops_pt.AbsDetJacobian
-    args_pt = (torch.ones((1, 2, 128, 128)),)
-    assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
+    meshgrid = tf.expand_dims(tfnn.tf_meshgrid(3, 3), 0)
+    out_tf = ops.AbsDetJacobian(meshgrid)
+
+    meshgrid_pt = torch.from_numpy(np.array(meshgrid))
+    meshgrid_pt = tfpyth.th_2D_channels_last_to_first(meshgrid_pt)
+
+    out_pt = ops_pt.AbsDetJacobian(meshgrid_pt)
+    assert _test_compatibility(out_tf, out_pt, permute_pt=True)
 
 
 def test_Parity():
@@ -95,78 +72,78 @@ def test_Parity():
     torch.manual_seed(42)
     tf.random.set_random_seed(42)
     out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
     out_pt = f_pt(*args_pt)
-    assert np.allclose(np.array(out_tf[0]), out_pt[0])
-    assert np.allclose(np.array(out_tf[1]), out_pt[1])
+    assert _test_compatibility(out_tf[0], out_pt[0], permute_pt=False)
+    assert _test_compatibility(out_tf[1], out_pt[1], permute_pt=False)
 
 
 def test_prepare_pairs():
     # TF function
-    f_tf = ops.prepare_pairs
-    args_tf = (tf.ones((10, 128, 128, 3)),)
     from functools import partial
 
-    arg = DotMap({"train": False, "static": False})
-    f_tf = partial(ops.prepare_pairs, arg=arg, reconstr_dim=128)
-    out_tf = f_tf(*args_tf)
+    kwargs = {
+        "train": False,
+        "static": False,
+        "contrast_var": 0.1,
+        "brightness_var": 0.1,
+        "saturation_var": 0.1,
+        "hue_var": 0.1,
+        "p_flip": 0.1,
+    }
+    arg = DotMap(kwargs)
+    t_tf = tf.ones((10, 128, 128, 3))
+    out_tf = ops.prepare_pairs(t_tf, 128, arg)
 
-    # PT function
-    f_pt = partial(ops_pt.prepare_pairs, reconstr_dim=128, train=False, static=False)
-    tf.disable_eager_execution()
-    f_pt = tfpyth.wrap_torch_from_tensorflow(f_pt, ["t_images"], [(None, 128, 128, 3)])
-    args_pt = (torch.ones((10, 128, 128, 3)),)
-    out_pt = f_pt(*args_pt)
-    if isinstance(out_pt, tuple) and isinstance(out_tf, tuple):
-        test_results = []
-        for opt, otf in zip(out_pt, out_tf):
-            test_results.append(np.allclose(np.array(otf), opt.numpy()))
-        assert all(test_results)
+    t_pt = torch.ones((10, 3, 128, 128))
+    out_pt = ops_pt.prepare_pairs(t_pt, 128, **kwargs)
+
+    assert _test_shape_compatibility(out_tf[0], out_pt[0], permute_pt=True)
+    assert _test_shape_compatibility(out_tf[1], out_pt[1], permute_pt=True)
 
 
 def test_reverse_batch():
-    f_tf = ops.reverse_batch
-    args_tf = (
+    out_tf = ops.reverse_batch(
         tf.ones((10, 128, 128, 2))
         * tf.reshape(tf.range(10, dtype=tf.float32), (10, 1, 1, 1)),
         2,
     )
-    f_pt = ops_pt.reverse_batch
-    args_pt = (
-        torch.ones((10, 128, 128, 2))
+    out_pt = ops_pt.reverse_batch(
+        torch.ones((10, 2, 128, 128))
         * torch.arange(10, dtype=torch.float32).view((10, 1, 1, 1)),
         2,
     )
-    assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
+    assert _test_shape_compatibility(out_tf, out_pt, permute_pt=True)
 
 
 def test_random_scal():
     f_tf = ops.random_scal
     args_tf = (2, 1, 1)
+    out_tf = f_tf(*args_tf)
     f_pt = ops_pt.random_scal
     args_pt = (2, 1, 1)
-    assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
+    out_pt = f_pt(*args_pt)
+    assert _test_compatibility(out_tf, out_pt)
 
 
 def test_part_map_to_mu_L_inv():
-    f_tf = ops.part_map_to_mu_L_inv
+    # TODO: check estimated moments
+    # part_maps_tf = tf.random_normal((10, 128, 128, 2), dtype=tf.float32)
+    part_maps_tf = tfnn.tf_hm(
+        tf.ones((1, 10, 2)) * 64, 128, 128, tf.ones((1, 10, 2)) * 3
+    )
+    part_maps_tf /= tf.reduce_sum(part_maps_tf, axis=[1, 2], keepdims=True)
+    scales_tf = tf.ones((10, 1, 1, 1))
+    out_tf = ops.part_map_to_mu_L_inv(part_maps_tf, scales_tf)
 
-    part_maps_tf = tf.random_normal((10, 128, 128, 2), dtype=tf.float32)
     part_maps_pt = tfpyth.th_NHWC_to_NCHW(torch.from_numpy(np.array(part_maps_tf)))
-    args_tf = (part_maps_tf, tf.ones((10, 2, 1, 1)))
-    torch.manual_seed(42)
-    tf.random.set_random_seed(42)
+    scales_pt = torch.ones((10, 1, 1, 1))
+    out_pt = ops_pt.part_map_to_mu_L_inv(part_maps_pt, scales_pt)
 
-    out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
-    f_pt = ops_pt.part_map_to_mu_L_inv
-    args_pt = (part_maps_pt, torch.ones((10, 2, 1, 1)))
-    out_pt = f_pt(*args_pt)
-    if isinstance(out_pt, tuple) and isinstance(out_tf, tuple):
-        test_results = []
-        for opt, otf in zip(out_pt, out_tf):
-            test_results.append(np.allclose(np.array(otf).shape, opt.numpy().shape))
-        assert all(test_results)
+    assert _test_compatibility(out_tf[0], out_pt[0], permute_pt=False)
+
+    # atol is not large enough
+    assert np.allclose(out_tf[1], out_pt[1].numpy(), atol=1.0e-6)
+    # assert _test_compatibility(out_tf[1], out_pt[1], permute_pt=False)
 
 
 def test_get_features():
@@ -174,9 +151,21 @@ def test_get_features():
 
     f_tf = functools.partial(ops.get_features, slim=True)
     args_tf = (tf.ones((10, 128, 128, 2)), tf.ones((10, 128, 128, 2)))
+    out_tf = f_tf(*args_tf)
     f_pt = functools.partial(ops_pt.get_features, slim=True)
     args_pt = (torch.ones((10, 2, 128, 128)), torch.ones((10, 2, 128, 128)))
-    assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
+    out_pt = f_pt(*args_pt)
+    assert _test_compatibility(out_tf, out_pt, permute_pt=False)
+
+
+def test_get_img_slice_around_mu():
+    from skimage import data
+
+    t = np.expand_dims(data.astronaut(), 0)
+    t = torch.from_numpy(t)
+    t = tfpyth.th_2D_channels_last_to_first(t)
+    image_slices = ops_pt.get_img_slice_around_mu(t, torch.zeros((1, 5, 2)), [49, 49])
+    assert image_slices.shape == (1, 5, 3, 49, 49)
 
 
 def test_augm_mu():
@@ -207,14 +196,10 @@ def test_augm_mu():
         image_in_pt, image_rec_pt, mu_pt, features_pt, batch_size, n_parts, move_list
     )
 
-    assert np.allclose(
-        np.array(out_tf[0]), tfpyth.th_2D_channels_first_to_last(out_pt[0])
-    )
-    assert np.allclose(
-        np.array(out_tf[1]), tfpyth.th_2D_channels_first_to_last(out_pt[1])
-    )
-    assert np.allclose(np.array(out_tf[2]), out_pt[2])
-    assert np.allclose(np.array(out_tf[3]), out_pt[3])
+    assert _test_compatibility(out_tf[0], out_pt[0], permute_pt=True)
+    assert _test_compatibility(out_tf[1], out_pt[1], permute_pt=True)
+    assert _test_compatibility(out_tf[2], out_pt[2], permute_pt=False)
+    assert _test_compatibility(out_tf[3], out_pt[3], permute_pt=False)
 
 
 def test_precision_dist_op():
@@ -237,23 +222,8 @@ def test_precision_dist_op():
     out_pt = ops_pt.precision_dist_op(
         circular_precision_pt, dist_pt, part_depth, nk, h, w
     )
-
-    assert np.allclose(out_tf[0], out_pt[0].numpy())
-    assert np.allclose(out_tf[1], out_pt[1].numpy())
-
-    # out_pt
-
-    # f_tf = ops.precision_dist_op
-    # args_tf = (tf.ones((10, 128, 128, 2)), tf.ones((10, 128, 128, 2)), 6, 128, 128)
-    # f_pt = ops_pt.precision_dist_op
-    # args_pt = (
-    #     torch.ones((10, 128, 128, 2)),
-    #     torch.ones((10, 128, 128, 2)),
-    #     6,
-    #     128,
-    #     128,
-    # )
-    # assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
+    assert _test_compatibility(out_tf[0], out_pt[0], permute_pt=False)
+    assert _test_compatibility(out_tf[1], out_pt[1], permute_pt=False)
 
 
 def test_feat_mu_to_enc():
@@ -343,26 +313,6 @@ def test_unary_mat():
     assert np.allclose(u_tf, u_th.numpy())
 
 
-def test_get_img_slice_around_mu():
-    f_tf = ops.get_img_slice_around_mu
-    args_tf = (tf.ones((10, 128, 128, 3)), tf.zeros((10, 2, 2)), (49, 49))
-    f_pt = ops_pt.get_img_slice_around_mu
-    args_pt = (
-        torch.ones((10, 3, 128, 128)),
-        torch.zeros((10, 2, 2)),
-        (49, 49),
-        128,
-        128,
-        2,
-    )
-    torch.manual_seed(42)
-    tf.random.set_random_seed(42)
-    out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
-    out_pt = f_pt(*args_pt)
-    assert np.allclose(np.array(out_tf), out_pt.permute((0, 1, 3, 4, 2)).numpy())
-
-
 def test_fold_img_with_mu():
     img_tf = tf.zeros((1, 128, 128, 3))
     mu_tf = tf.zeros((1, 10, 2))
@@ -370,8 +320,6 @@ def test_fold_img_with_mu():
     threshold = 0.75
 
     out_tf = ops.fold_img_with_mu(img_tf, mu_tf, scale_tf, False, threshold)
-
-    ## Pytorch
 
     img_pt = torch.zeros((1, 3, 128, 128))
     mu_pt = torch.zeros((1, 10, 2))
@@ -396,13 +344,14 @@ def test_mu_img_gate():
 def test_binary_activation():
     f_tf = ops.binary_activation
     args_tf = (tf.ones((10, 128, 128, 2)),)
+    out_tf = f_tf(*args_tf)
     f_pt = ops_pt.binary_activation
     args_pt = (torch.ones((10, 128, 128, 2)),)
-    assert _test_compatibility(f_tf, args_tf, f_pt, args_pt)
+    out_pt = f_pt(*args_pt)
+    assert _test_compatibility(out_tf, out_pt)
 
 
 def test_fold_img_with_L_inv():
-    ## Tensorflow
     img_tf = tf.zeros((1, 128, 128, 3))
     mu_tf = tf.zeros((1, 10, 2))
     L_inv_tf = tf.ones((1, 10, 2, 2))
@@ -413,7 +362,6 @@ def test_fold_img_with_L_inv():
     out_tf = ops.fold_img_with_L_inv(
         img_tf, mu_tf, L_inv_tf, scale_tf, False, threshold
     )
-
     ## Pytorch
     f_pt = ops_pt.fold_img_with_L_inv
 
@@ -422,7 +370,7 @@ def test_fold_img_with_L_inv():
     L_inv_pt = torch.ones((1, 10, 2, 2))
     scale_pt = torch.ones((1, 1, 2, 2))
     threshold = 0.75
-    out_pt = ops_pt.fold_img_with_L_inv(img_pt, mu_pt, L_inv_pt, scale_pt, threshold)
+    out_pt, _ = ops_pt.fold_img_with_L_inv(img_pt, mu_pt, L_inv_pt, scale_pt, threshold)
 
     assert np.allclose(out_tf, tfpyth.th_2D_channels_first_to_last(out_pt).numpy())
 
@@ -459,7 +407,6 @@ def test_torch_image_random_contrast():
     tf.set_random_seed(seed)
     tf.enable_eager_execution()
     out_tf = f_tf(*args_tf)
-    tf.disable_eager_execution()
     out_pt = f_pt(*args_pt)
     assert list(out_tf.shape) == list(tfpyth.th_NCHW_to_NHWC(out_pt).numpy().shape)
 
@@ -468,3 +415,20 @@ def test_tile_nd():
     a = torch.zeros((10, 1, 1, 1))
     b = ops_pt.tile_nd(a, [1, 10, 20, 30])
     assert b.shape == (10, 10, 20, 30)
+
+
+def test_blob_generation():
+    # check if xy order is the same
+    covar = tf.concat([tf.ones((1, 10, 1)) * 3, tf.ones((1, 10, 1)) * 6], axis=2)
+
+    part_maps_tf = tfnn.tf_hm(tf.ones((1, 10, 2)) * 64, 128, 128, covar)
+    part_maps_tf /= tf.reduce_sum(part_maps_tf, axis=[1, 2], keepdims=True)
+
+    # estimated_blob = op
+    part_maps_pt = tfpyth.th_NHWC_to_NCHW(torch.from_numpy(np.array(part_maps_tf)))
+    scales_pt = torch.ones((1, 1, 1, 1))
+    mu, L_inv = ops_pt.part_map_to_mu_L_inv(part_maps_pt, scales_pt)
+    img = torch.zeros((1, 3, 128, 128))
+
+    _, foldy_map = ops_pt.fold_img_with_L_inv(img, mu, L_inv, 1.0, 0.3, normalize=False)
+

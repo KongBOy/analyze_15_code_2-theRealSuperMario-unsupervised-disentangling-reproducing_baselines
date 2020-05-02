@@ -2,6 +2,7 @@ import pytest
 from src.torch import dataloading_pt
 
 
+@pytest.mark.test_iwr
 def test_stochastic_pairs():
     root = (
         "/export/home/sabraun/code/unsupervised-disentangling/datasets/exercise_dataset"
