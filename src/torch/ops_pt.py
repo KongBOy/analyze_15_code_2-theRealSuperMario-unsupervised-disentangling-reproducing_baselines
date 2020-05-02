@@ -8,46 +8,79 @@ import tfpyth
 from src.tf import ops
 
 from torchvision.transforms import functional as TF
+from typing import *
 
 
 def AbsDetJacobian(batch_meshgrid):
-    # batch_meshgrid = tfpyth.th_2D_channels_first_to_last(batch_meshgrid).contiguous()
-    # out = tfpyth.wrap_torch_from_tensorflow(ops.AbsDetJacobian)(batch_meshgrid)
-    # out = tfpyth.th_2D_channels_last_to_first(out)
-    # out = out.to(batch_meshgrid.device)
-    # return out
-
-
     """
     :param batch_meshgrid: takes meshgrid tensor of dim [bn, h, w, 2] (conceptually meshgrid represents a two dimensional function f = [fx, fy] on [bn, h, w] )
     :return: returns Abs det of  Jacobian of f of dim [bn, h, w, 1 ]
     """
     y_c = torch.unsqueeze(batch_meshgrid[:, 0, :, :], 1)
     x_c = torch.unsqueeze(batch_meshgrid[:, 1, :, :], 1)
-    sobel_x = 1 / 4 * torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=batch_meshgrid.device)
+    sobel_x = (
+        1
+        / 4
+        * torch.tensor(
+            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+            dtype=torch.float32,
+            device=batch_meshgrid.device,
+        )
+    )
     sobel_x_filter = sobel_x.view((1, 1, 3, 3))
     sobel_y_filter = sobel_x_filter.permute((0, 1, 3, 2))
 
-
-    filtered_y_y = torch.nn.functional.conv2d(
-        y_c, sobel_y_filter, stride=1
-    )
-    filtered_y_x = torch.nn.functional.conv2d(
-        y_c, sobel_x_filter, stride=1
-    )
-    filtered_x_y = torch.nn.functional.conv2d(
-        x_c, sobel_y_filter, stride=1
-    )
-    filtered_x_x = torch.nn.functional.conv2d(
-        x_c, sobel_x_filter, stride=1
-    )
+    filtered_y_y = torch.nn.functional.conv2d(y_c, sobel_y_filter, stride=1)
+    filtered_y_x = torch.nn.functional.conv2d(y_c, sobel_x_filter, stride=1)
+    filtered_x_y = torch.nn.functional.conv2d(x_c, sobel_y_filter, stride=1)
+    filtered_x_x = torch.nn.functional.conv2d(x_c, sobel_x_filter, stride=1)
 
     Det = torch.abs(filtered_y_y * filtered_x_x - filtered_y_x * filtered_x_y)
-    pad = (1, 1, 1, 1, 0, 0) # pad by  (1, 1), (1, 1, ) ( 0, 0)
-    Det = torch.nn.functional.pad(Det, pad, mode="constant")
+    # Tensorflow does not have symmetric padding, thus using helper function
+    pad = (1, 1, 1, 1)
+    Det = torch_symmetric_pad(Det, pad)
 
     return Det
 
+
+def torch_symmetric_pad(im: torch.Tensor, padding: Tuple[int, int, int, int]):
+    """performs 2D symmetric padding
+
+    Parameters
+    ----------
+    im : torch.Tensor
+        [description]
+    padding : Tuple[int, int, int, int]
+        [description]
+
+    Returns
+    -------
+    [type]
+        [description]
+
+    References:
+    ..[1] : https://discuss.pytorch.org/t/symmetric-padding/19866/2
+    """
+    h, w = im.shape[-2:]
+    left, right, top, bottom = padding
+
+    x_idx = np.arange(-left, w + right)
+    y_idx = np.arange(-top, h + bottom)
+
+    def reflect(x, minx, maxx):
+        """ Reflects an array around two points making a triangular waveform that ramps up
+        and down,  allowing for pad lengths greater than the input length """
+        rng = maxx - minx
+        double_rng = 2 * rng
+        mod = np.fmod(x - minx, double_rng)
+        normed_mod = np.where(mod < 0, mod + double_rng, mod)
+        out = np.where(normed_mod >= rng, double_rng - normed_mod, normed_mod) + minx
+        return np.array(out, dtype=x.dtype)
+
+    x_pad = reflect(x_idx, -0.5, w - 0.5)
+    y_pad = reflect(y_idx, -0.5, h - 0.5)
+    xx, yy = np.meshgrid(x_pad, y_pad)
+    return im[..., yy, xx]
 
 
 def torch_image_random_contrast(image, lower, upper, seed=None):
@@ -399,38 +432,7 @@ def feat_mu_to_enc(
     feat_shape=None,
     heat_feat_normalize=True,
     range_=10,
-    # bs=2,
-    # n_features=64,
-    # n_keypoints=64
 ):
-    # features_ph = tf.compat.v1.placeholder(tf.float32, name="features_ph")
-    # mu_ph = tf.compat.v1.placeholder(tf.float32, name="mu_ph")
-    # L_inv_ph = tf.compat.v1.placeholder(tf.float32, name="L_inv_ph")
-
-    # encoding_list = ops.feat_mu_to_enc(
-    #     features_ph,
-    #     mu_ph,
-    #     L_inv_ph,
-    #     reconstruct_stages,
-    #     part_depths,
-    #     feat_map_depths,
-    #     static,
-    #     n_reverse,
-    #     covariance,
-    #     feat_shape,
-    #     heat_feat_normalize,
-    #     range=range_,
-    # )
-    # f = tfpyth.torch_from_tensorflow(
-    #     tf.compat.v1.Session(), [features_ph, mu_ph, L_inv_ph], encoding_list
-    # ).apply
-
-    # TODO: define input
-    # def func(features, mu, L_inv):
-    #     out = ops.feat_mu_to_enc(features, mu, L_inv, reconstruct_stages, part_depths, feat_map_depths, static, n_reverse, covariance=covariance, feat_shape=feat_shape, heat_feat_normalize=heat_feat_normalize)
-    #     return out
-    # f = tfpyth.wrap_torch_from_tensorflow(func, ["features", "mu", "L_inv"], [(bs, n_keypoints, n_features), (bs, n_keypoints, 2), (bs, n_keypoints, 2, 2)])
-    # return f(features, mu, L_inv)
     bn, nk, nf = list(features.shape)
     if static:
         reverse_features = torch.cat([features[bn // 2 :], features[: bn // 2]], dim=0)
@@ -441,8 +443,11 @@ def feat_mu_to_enc(
     encoding_list = []
     circular_precision = tile_nd(
         torch_reshape(
-            torch.tensor([[range_, 0.0], [0, range_]], dtype=torch.float32,
-            device=features.device),
+            torch.tensor(
+                [[range_, 0.0], [0, range_]],
+                dtype=torch.float32,
+                device=features.device,
+            ),
             shape=[1, 1, 2, 2],
         ),
         [bn, nk, 1, 1],
@@ -535,16 +540,6 @@ def unary_mat(vector):
 
 
 def get_img_slice_around_mu(img, mu, slice_size):
-    # TODO: rewrite this in pytorch
-    # import functools
-
-    # def func(img, mu):
-    #     return ops.get_img_slice_around_mu(img, mu, slice_size)
-
-    # func = tfpyth.wrap_torch_from_tensorflow(
-    #     func, ["img", "mu"], [(None, h, w, 3), (None, nk, 2)]
-    # )
-    # return func(img, mu)
     img = tfpyth.th_2D_channels_first_to_last(img)
 
     h, w, = slice_size
@@ -569,28 +564,58 @@ def get_img_slice_around_mu(img, mu, slice_size):
     field = torch.cat([y, x], dim=-1) + mu_no_grad
     h1 = tile_nd(torch_reshape(torch.arange(bn), (bn, 1, 1, 1, 1)), [1, nk, h, w, 1])
     idx = torch.cat([h1, field], dim=-1)
-    idx = torch_astype(idx, torch.int32)
+    idx = torch_astype(idx, torch.int64)
 
-    image_slices = gather_nd(img, idx, img.shape, idx.shape)
+
+    image_slices = []
+    for ib in range(idx.shape[0]):
+        for ik in range(idx.shape[1]):
+            gathered = [gather_nd(img[ib, ...], idx[ib, ik, ..., i].view((-1, 1))).view((49, 49, 1)) for i in range(3)]
+            gathered = torch.cat(gathered, dim=-1) # [49, 49, 3]
+            image_slices.append(gathered)
+    image_slices = torch.stack(image_slices, dim=0).view(idx.shape)
+
+    # image_slices = gather_nd(img, idx, img.shape, idx.shape)
     image_slices = image_slices.permute(
         (0, 1, 4, 2, 3)
     )  # [N, nk, H, W, C] -> [N, nk, C, H, W]
     return image_slices
 
 
-def gather_nd(params, indices, params_shape, indices_shape):
+# def gather_nd(params, indices, params_shape, indices_shape):
     """dirty wrapper for tf.gather_nd to use with pytorch"""
 
-    def func(params, indices):
-        return tf.gather_nd(params, indices)
+    # def func(params, indices):
+    #     return tf.gather_nd(params, indices)
 
-    out = tfpyth.wrap_torch_from_tensorflow(
-        func,
-        ["params", "indices"],
-        input_shapes=[params_shape, indices_shape],
-        input_dtypes=[tf.float32, tf.int32],
-    )(params, indices)
-    return out
+    # out = tfpyth.wrap_torch_from_tensorflow(
+    #     func,
+    #     ["params", "indices"],
+    #     input_shapes=[params_shape, indices_shape],
+    #     input_dtypes=[tf.float32, tf.int32],
+    # )(params, indices)
+    # return out
+
+
+def gather_nd(params, indices):
+    '''
+    the input indices must be a 2d tensor in the form of [[a,b,..,c],...], 
+    which represents the location of the elements.
+    '''
+    import functools
+    import operator
+    max_value = functools.reduce(operator.mul, list(params.size())) - 1
+    indices = indices.t().long()
+    ndim = indices.size(0)
+    idx = torch.zeros_like(indices[0]).long()
+    m = 1
+    for i in range(ndim)[::-1]:
+        idx += indices[i] * m 
+        m *= params.size(i)
+
+    idx[idx < 0] = 0
+    idx[idx > max_value] = 0
+    return torch.take(params, idx)
 
 
 def fold_img_with_mu(img, mu, scale, threshold, normalize=True):
