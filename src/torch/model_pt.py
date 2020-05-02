@@ -37,6 +37,7 @@ class Model(torch.nn.Module):
         n_parts,
         adversarial,
         patch_size,
+        static,
         **kwargs
     ):
         super(Model, self).__init__()
@@ -61,10 +62,11 @@ class Model(torch.nn.Module):
         self.n_parts = n_parts
         self.adversarial = adversarial
         self.patch_size = patch_size
+        self.static = static
         if self.adversarial:
             self.discriminator = architectures_pt.Discriminator_Patch()
 
-    def forward(self, image_in, image_rec=None, static=False):
+    def forward(self, image_in, image_rec=None):
         part_maps, raw_features = self.encoder(image_in)
 
         mu, L_inv = part_map_to_mu_L_inv(part_maps, self.L_inv_scal)
@@ -81,7 +83,7 @@ class Model(torch.nn.Module):
             covariance=self.covariance,
             feat_shape=self.average_features_mode,
             heat_feat_normalize=self.heat_feat_normalize,
-            static=static,
+            static=self.static,
         )
         encoding_same_id = [
             tfpyth.th_2D_channels_last_to_first(e) for e in encoding_same_id
@@ -139,6 +141,7 @@ def make_visualizations(
     image_in,
     image_rec,
     heat_mask_l2,
+    transform_mesh,
     l_2_threshold,
     in_dim,
     part_depths,
@@ -172,10 +175,20 @@ def make_visualizations(
         visualizations["patch_fake"] = out.patches[
             f_dim : f_dim + f_dim // 2, :n_c, :, :
         ]
-        visualizations["same_id_reconstruction"] = out.reconstruct_same_id
-        visualizations["same_id_reconstruction"] = utils.summary_feat_and_parts(
-            out.encoding_list, part_depths, False
-        )
+    visualizations["reconstruct_same_id"] = out.reconstruct_same_id
+    visualizations["normal"] = normal
+
+    parts, feature_maps = utils.summary_feat_and_parts(
+        out.encoding_same_id, part_depths, True, False
+    )
+    for n in range(len(parts)):
+        visualizations["parts_{}".format(n)] = parts[n]
+    for n in range(len(feature_maps)):
+        visualizations["feature_maps_{}".format(n)] = feature_maps[n]
+
+    volume_mesh = ops_pt.AbsDetJacobian(transform_mesh)
+    visualizations["VolumeElement"] = volume_mesh
+    visualizations["foldy_map"] = heat_mask_l2
 
     # scale from range [0, 1] to [-1, 1]
     for k, v, in visualizations.items():

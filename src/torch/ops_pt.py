@@ -630,7 +630,7 @@ def fold_img_with_mu(img, mu, scale, threshold, normalize=True):
     else:
         folded_img = torch.einsum("bcij,bij->bcij", img, heat_scal)
 
-    return folded_img, torch.unsqueeze(heat_scal, axis=1)
+    return folded_img, torch.unsqueeze(heat_scal, dim=1)
 
 
 def mu_img_gate(mu, resolution, scale):
@@ -695,7 +695,7 @@ def fold_img_with_L_inv(img, mu, L_inv, scale, threshold, normalize=True):
     if normalize:
         heat_scal = heat_scal / norm
     folded_img = torch.einsum("bcij,bij->bcij", img, heat_scal)
-    return folded_img
+    return folded_img, torch.unsqueeze(heat_scal, dim=1)
 
 
 def probabilistic_switch(handles, handle_probs, counter, scale=10000.0):

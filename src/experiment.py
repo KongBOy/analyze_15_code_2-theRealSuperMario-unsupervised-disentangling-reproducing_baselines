@@ -71,10 +71,20 @@ class Iterator(TemplateIterator):
 
     def step_op(self, model, **kwargs):
         # get inputs
+        # import pudb
+
+        # pudb.set_trace()
 
         x = kwargs["image_in"]
-        x = to_torch(x, permute=True)
-        image_batch_tiled = ptcompat.torch_tile_nd(x, [2, 1, 1, 1])
+        if not self.config.model_params.static:
+            x = np.reshape(
+                x, (-1, self.config.spatial_size, self.config.spatial_size, 3)
+            )
+            x = to_torch(x, permute=True)
+            image_batch_tiled = x
+        else:
+            x = to_torch(x, permute=True)
+            image_batch_tiled = ptcompat.torch_tile_nd(x, [2, 1, 1, 1])
 
         def train_op():
             # compute losses and run optimization
@@ -96,7 +106,7 @@ class Iterator(TemplateIterator):
                 t_images,
                 self.config.model_params.reconstr_dim,
                 train=True,
-                static=False,
+                static=self.config.model_params.static,
                 contrast_var=self.config.contrast_var,
                 brightness_var=self.config.brightness_var,
                 saturation_var=self.config.saturation_var,
@@ -157,8 +167,8 @@ class Iterator(TemplateIterator):
             image_in, image_rec = ops_pt.prepare_pairs(
                 t_images,
                 self.config.model_params.reconstr_dim,
-                train=True,  # train applies augmentation transforms
-                static=False,
+                train=False,  # train applies augmentation transforms
+                static=self.config.model_params.static,
                 contrast_var=self.config.contrast_var,
                 brightness_var=self.config.brightness_var,
                 saturation_var=self.config.saturation_var,
@@ -207,6 +217,7 @@ class Iterator(TemplateIterator):
                 image_in,
                 image_rec,
                 heat_mask_l2,
+                transform_mesh,
                 self.config.model_params.l_2_threshold,
                 self.config.model_params.in_dim,
                 self.config.model_params.part_depths,

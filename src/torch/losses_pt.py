@@ -33,7 +33,7 @@ def reconstruction_loss(
         distance_metric = img_difference ** 2
 
     if fold_with_shape:
-        fold_img_squared = fold_img_with_L_inv(
+        fold_img_squared, heat_mask_l1 = fold_img_with_L_inv(
             distance_metric,
             mu.detach(),
             L_inv.detach(),
@@ -47,7 +47,7 @@ def reconstruction_loss(
             distance_metric, mu, l_2_scal, threshold=l_2_threshold, normalize=True,
         )
 
-    l2_loss = torch.mean(torch.sum(fold_img_squared, dim=[1, 2]))
+    l2_loss = torch.mean(torch.sum(fold_img_squared, dim=[2, 3]))
 
     return l2_loss, heat_mask_l2
 

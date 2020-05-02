@@ -39,7 +39,7 @@ def summary_feat_and_parts(
     encoding_list, part_depths, visualize_features=False, square=True
 ):
     part_outputs = []
-    feat_maps = []
+    feat_outputs = []
     for n, enc in enumerate(encoding_list):
         part_maps, feat_maps = (
             enc[:, : part_depths[n], :, :],
@@ -61,7 +61,7 @@ def summary_feat_and_parts(
                 color_feat_map = batch_colour_map(
                     feat_maps / torch.sum(feat_maps, dim=[2, 3], keepdims=True)
                 )
-                feat_maps.append(color_feat_map ** 2)
+                feat_outputs.append(color_feat_map ** 2)
             # if feat_maps.get_shape().as_list()[-1] > 0:
             #     with tf.variable_scope("feature_maps"):
             #         if square:
@@ -74,4 +74,4 @@ def summary_feat_and_parts(
             #             tensor=color_feat_map ** 2,
             #             max_outputs=4,
             #         )
-    return part_outputs, feat_maps
+    return part_outputs, feat_outputs
