@@ -1,0 +1,98 @@
+datasets: 
+  train: src.torch.dataloading_pt.ExerciseTrain
+  validation: src.torch.dataloading_pt.ExerciseTest
+model: src.experiment.Model
+iterator: src.experiment.Iterator
+
+batch_size: 24
+spatial_size: 128
+
+lr: 1.0e-3
+lr_decay_begin: 1000
+lr_decay_end: 100000
+log_freq: 250
+ckpt_freq: 1000
+num_steps: 1000001
+
+
+dropout_prob: 0.0
+
+model_params:
+  heat_dim: 64
+  nFeat_1: 256
+  nFeat_2: 256
+  L_inv_scal: 0.8
+  rec_stages: [
+        [128, 128],
+        [64, 64],
+        [32, 32],
+        [16, 16],
+        [8, 8],
+        [4, 4],
+    ]  # 128x128 model
+  part_depths: [
+        16,
+        16,
+        16,
+        16,
+        4,
+        2,
+    ]
+  feat_slices: [[0, 0], [0, 0], [0, 0], [4, 16], [2, 4], [0, 2]]
+  covariance: False # default false in original, enabled using --covariance
+  average_features_mode: False
+  heat_feat_normalize: True
+  static: False # dataset does not consist of single images
+  reconstr_dim: 128
+  n_c: 3  
+  bn: 24
+  n_parts: 16
+  adversarial: False
+  patch_size: [49, 49]
+  in_dim: 128
+  l_2_scal: 0.1
+  l_2_threshold: 0.2
+
+
+L1: False # default false in original, enabled using --L1
+
+
+tps_params:
+  scal: 0.8
+  tps_scal: 0.05
+  rot_scal: 0.1
+  off_scal: 0.15
+  scal_var: 0.05
+  augm_scal: 1.0
+
+
+# for prepare pairs
+contrast_var: 0.5
+brightness_var: 0.3
+saturation_var: 0.1
+hue_var: 0.3
+p_flip: 0.0
+
+
+# TODO: look up actual values
+loss_params:
+  lambda_t: 5 # c_trans in original
+  lambda_p: 0.1 # c_precision_trans in original
+  lambda_r: 1 # c_l2 in original
+  lambda_g: 0.0002 # 
+
+
+
+integrations:
+  tensorboardX:
+    active: True
+    handlers:
+    - scalars
+    - images
+  tensorboard:
+    active: True
+    handlers:
+    - scalars
+    - images
+  wandb:
+    active: False
