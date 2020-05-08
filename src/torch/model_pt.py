@@ -85,9 +85,6 @@ class Model(torch.nn.Module):
             heat_feat_normalize=self.heat_feat_normalize,
             static=self.static,
         )
-        encoding_same_id = [
-            tfpyth.th_2D_channels_last_to_first(e) for e in encoding_same_id
-        ]
 
         reconstruct_same_id = self.img_decoder(encoding_same_id)
 
@@ -195,3 +192,29 @@ def make_visualizations(
         visualizations[k] = (v - 0.5) * 2
 
     return visualizations
+
+
+def split_batch(x):
+    bs = list(x.shape)[0]
+    return x[: (bs // 2), ...], x[(bs // 2) :, ...]
+
+
+from src.torch import losses_pt
+
+
+def make_adversarial_logs(out):
+    adversarial_logs = {}
+    real_logits, fake_logits = split_batch(out.t_D_logits)
+    real_probs, fake_probs = split_batch(out.t_D)
+    d_loss, g_loss = losses_pt.adversarial_loss(real_logits, fake_logits)
+
+    real_accuracy = torch.mean(real_probs > 0.5)
+    fake_accuracy = torch.mean(fake_probs < 0.5)
+
+    adversarial_logs["d_loss"] = d_loss
+    adversarial_logs["g_loss"] = g_loss
+    adversarial_logs["real_accuracy"] = real_accuracy
+    adversarial_logs["fake_accuracy"] = fake_accuracy
+
+    return adversarial_logs
+
