@@ -377,6 +377,7 @@ def tile_nd(a, n_tile_nd):
 
 
 def get_features(features, part_map, slim):
+    """ returns tensor shaped [B, keypoint_channels, appearance_channels] """
     if slim:
         features = torch.einsum("bfij,bkij->bkf", features, part_map)
     else:
