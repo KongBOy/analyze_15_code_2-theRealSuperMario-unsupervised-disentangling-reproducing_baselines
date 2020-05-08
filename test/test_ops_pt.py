@@ -49,6 +49,7 @@ def test_augm():
     out_tf = ops.augm(t_tf, arg=arg)
 
     out_pt = ops_pt.augm(t_pt, **arg)
+    assert out_pt.shape == (1, 3, 128, 128)
     return _test_shape_compatibility(out_tf, out_pt, permute_pt=True)
 
 
@@ -60,6 +61,7 @@ def test_AbsDetJacobian():
     meshgrid_pt = tfpyth.th_2D_channels_last_to_first(meshgrid_pt)
 
     out_pt = ops_pt.AbsDetJacobian(meshgrid_pt)
+    assert out_pt.shape == (1, 1, 3, 3)
     assert _test_compatibility(out_tf, out_pt, permute_pt=True)
 
 
@@ -97,6 +99,8 @@ def test_prepare_pairs():
     t_pt = torch.ones((10, 3, 128, 128))
     out_pt = ops_pt.prepare_pairs(t_pt, 128, **kwargs)
 
+    assert out_pt[0].shape == (10, 3, 128, 128)
+    assert out_pt[1].shape == (10, 3, 128, 128)
     assert _test_shape_compatibility(out_tf[0], out_pt[0], permute_pt=True)
     assert _test_shape_compatibility(out_tf[1], out_pt[1], permute_pt=True)
 
@@ -161,7 +165,9 @@ def test_get_features():
 def test_get_img_slice_around_mu():
     import skimage
 
-    image_t = torch.unsqueeze(torch.from_numpy(skimage.data.astronaut()), 0).permute(0, 3, 1, 2)
+    image_t = torch.unsqueeze(torch.from_numpy(skimage.data.astronaut()), 0).permute(
+        0, 3, 1, 2
+    )
     mu = torch.zeros((1, 16, 2))
 
     image_slices = ops_pt.get_img_slice_around_mu(image_t, mu, [49, 49])
@@ -286,6 +292,7 @@ def test_feat_mu_to_enc():
         feat_shape=feat_shape,
         heat_feat_normalize=heat_feat_normalize,
     )
+    assert out_pt[0].shape == (bs, nk, 128, 128)
 
 
 def test_heat_map_function():
