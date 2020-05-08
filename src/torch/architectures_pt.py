@@ -285,6 +285,7 @@ class Discriminator_Patch(torch.nn.Module):
             torch.nn.BatchNorm2d(128),
             torch.nn.BatchNorm2d(256),
         ]
+        self.batch_norms = torch.nn.ModuleList(self.batch_norms)
 
         self.convs = [
             torch.nn.Conv2d(in_channels, 32, 4, 1, padding=0),
@@ -292,6 +293,7 @@ class Discriminator_Patch(torch.nn.Module):
             torch.nn.Conv2d(64, 128, 4, stride=2, padding=0),
             torch.nn.Conv2d(128, 256, 4, stride=2, padding=0),
         ]
+        self.convs = torch.nn.ModuleList(self.convs)
         self.final_fc = torch.nn.Linear(4 * 4 * 256, 1, bias=False)
 
     def forward(self, x):

@@ -159,13 +159,13 @@ def test_get_features():
 
 
 def test_get_img_slice_around_mu():
-    from skimage import data
+    import skimage
 
-    t = np.expand_dims(data.astronaut(), 0)
-    t = torch.from_numpy(t)
-    t = tfpyth.th_2D_channels_last_to_first(t)
-    image_slices = ops_pt.get_img_slice_around_mu(t, torch.zeros((1, 5, 2)), [49, 49])
-    assert image_slices.shape == (1, 5, 3, 49, 49)
+    image_t = torch.unsqueeze(torch.from_numpy(skimage.data.astronaut()), 0).permute(0, 3, 1, 2)
+    mu = torch.zeros((1, 16, 2))
+
+    image_slices = ops_pt.get_img_slice_around_mu(image_t, mu, [49, 49])
+    assert image_slices.shape == (1, 16, 3, 49, 49)
 
 
 def test_augm_mu():

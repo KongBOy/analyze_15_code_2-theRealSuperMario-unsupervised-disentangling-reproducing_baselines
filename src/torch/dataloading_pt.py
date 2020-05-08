@@ -10,7 +10,7 @@ import os
 from edflow.util import PRNGMixin
 import PIL
 
-# cv2.setNumThreads(0)
+cv2.setNumThreads(0)
 # https://docs.chainer.org/en/stable/reference/generated/chainer.iterators.MultiprocessIterator.html
 
 
@@ -164,6 +164,59 @@ class ExerciseTest(StochasticPairs):
         super(ExerciseTest, self).__init__(
             root, csv, spatial_size, id_colname, path_colname
         )
+
+
+class DeepfashionTrain(StochasticPairs):
+    def __init__(self, config):
+        root = "/export/home/sabraun/code/2020_parts/experiments/exp_03/secret_unsupervised_disentanglement/datasets/deepfashion_allJointsVisible/images"
+        csv = "/export/home/sabraun/code/2020_parts/experiments/exp_03/secret_unsupervised_disentanglement/datasets/deepfashion_allJointsVisible/data_train.csv"
+        spatial_size = config["spatial_size"]
+        id_colname = "id"
+        path_colname = "filename"
+        super(DeepfashionTrain, self).__init__(
+            root, csv, spatial_size, id_colname, path_colname
+        )
+
+    def get_example(self, i):
+        choices = self.labels["choices"][i]
+
+        view0 = self.load_image(self.labels[self.path_colname][i])
+        view0 = np.pad(
+            view0, ((20, 20), (20, 20), (0, 0)), constant_values=1.0
+        )  # small padding to prevent head to get out of bound
+
+        view0 = cv2.resize(view0, (self.spatial_size, self.spatial_size))
+
+        batch = view0
+
+        return {"image_in": batch}
+
+
+# TODO: currently, there is no test split
+class DeepfashionTest(StochasticPairs):
+    def __init__(self, config):
+        root = "/export/home/sabraun/code/2020_parts/experiments/exp_03/secret_unsupervised_disentanglement/datasets/deepfashion_allJointsVisible/images"
+        csv = "/export/home/sabraun/code/2020_parts/experiments/exp_03/secret_unsupervised_disentanglement/datasets/deepfashion_allJointsVisible/data_test.csv"
+        spatial_size = config["spatial_size"]
+        id_colname = "id"
+        path_colname = "filename"
+        super(DeepfashionTest, self).__init__(
+            root, csv, spatial_size, id_colname, path_colname
+        )
+
+    def get_example(self, i):
+        choices = self.labels["choices"][i]
+
+        view0 = self.load_image(self.labels[self.path_colname][i])
+        view0 = np.pad(
+            view0, ((20, 20), (20, 20), (0, 0)), constant_values=1.0
+        )  # small padding to prevent head to get out of bound
+
+        view0 = cv2.resize(view0, (self.spatial_size, self.spatial_size))
+
+        batch = view0
+
+        return {"image_in": batch}
 
 
 def add_choices(labels, return_by_cid=False, character_id_key="character_id"):

@@ -18,6 +18,14 @@ from supermariopy.ptutils import utils as ptu
 from src.torch import ops_pt
 
 
+from supermariopy.ptutils.tps import ThinPlateSpline, make_input_tps_param
+
+# from torchvision.transforms import functional as F
+from torch.nn import functional as F
+from src.torch import architectures_pt, ops_pt, utils
+from dotmap import DotMap
+
+
 class Model(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -32,8 +40,8 @@ class Model(nn.Module):
 
         self.net = model_pt.Model(**self.model_args)
 
-    def forward(self, x):
-        out = self.net(x)
+    def forward(self, image_in, image_rec=None):
+        out = self.net(image_in, image_rec)
         return out
 
 
@@ -53,12 +61,16 @@ class Iterator(TemplateIterator):
         self.config = self.model.config
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config.lr)
+        self.disc_optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.config.disc_lr
+        )
         self.loss_params = self.model.config.loss_params
 
     def save(self, checkpoint_path):
         state = {
             "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
+            "disc_optimizer": self.disc_optimizer.state_dict(),
         }
         torch.save(state, checkpoint_path)
 
@@ -66,6 +78,7 @@ class Iterator(TemplateIterator):
         state = torch.load(checkpoint_path)
         self.model.load_state_dict(state["model"])
         self.optimizer.load_state_dict(state["optimizer"])
+        self.disc_optimizer.load_state_dict(state["disc_optimizer"])
 
     def step_op(self, model, **kwargs):
         x = kwargs["image_in"]
@@ -106,7 +119,7 @@ class Iterator(TemplateIterator):
                 hue_var=self.config.hue_var,
                 p_flip=self.config.p_flip,
             )
-            out = model(image_in)
+            out = model(image_in, image_rec)
 
             mu = out.mu
             part_maps = out.part_maps
@@ -129,118 +142,125 @@ class Iterator(TemplateIterator):
                 self.config.model_params.l_2_threshold,
             )
 
+            real_logits, fake_logits = split_batch(out.t_D_logits)
+            d_loss, g_loss = losses_pt.adversarial_loss(real_logits, fake_logits)
+
             total_loss = (
                 transform_loss_val * self.loss_params.lambda_t
                 + precision_loss_val * self.loss_params.lambda_p
                 + l2_loss * self.loss_params.lambda_r
+                + g_loss * self.loss_params.lambda_g
             )
 
             self.optimizer.zero_grad()
-            total_loss.backward()
+            total_loss.backward(retain_graph=True)
             self.optimizer.step()
 
+            self.disc_optimizer.zero_grad()
+            d_loss.backward()
+            self.disc_optimizer.step()
+
         def log_op():
-            # calculate logs every now and then
-            model.eval()
+            with torch.no_grad():
+                # calculate logs every now and then
+                model.eval()
 
-            # prepare tps
-            tps_params = self.config.tps_params
-            tps_params["batch_size"] = 2 * self.config.batch_size
+                # prepare tps
+                tps_params = self.config.tps_params
+                tps_params["batch_size"] = 2 * self.config.batch_size
 
-            # TODO: replace with actual tps sampling
-            tps_param_dic = tps.tps_parameters(**tps_params)
-            coord, vector = tps.make_input_tps_param(tps_param_dic)
-            t_images, t_mesh = tps.ThinPlateSpline(
-                image_batch_tiled,
-                coord,
-                vector,
-                self.config.model_params.in_dim,
-                self.config.model_params.n_c,
-            )
-            image_in, image_rec = ops_pt.prepare_pairs(
-                t_images,
-                self.config.model_params.reconstr_dim,
-                train=False,  # train applies augmentation transforms
-                static=self.config.model_params.static,
-                contrast_var=self.config.contrast_var,
-                brightness_var=self.config.brightness_var,
-                saturation_var=self.config.saturation_var,
-                hue_var=self.config.hue_var,
-                p_flip=self.config.p_flip,
-            )
-            out = model(image_in)
+                # TODO: replace with actual tps sampling
+                tps_param_dic = tps.tps_parameters(**tps_params)
+                coord, vector = tps.make_input_tps_param(tps_param_dic)
+                t_images, t_mesh = tps.ThinPlateSpline(
+                    image_batch_tiled,
+                    coord,
+                    vector,
+                    self.config.model_params.in_dim,
+                    self.config.model_params.n_c,
+                )
+                image_in, image_rec = ops_pt.prepare_pairs(
+                    t_images,
+                    self.config.model_params.reconstr_dim,
+                    train=False,  # train applies augmentation transforms
+                    static=self.config.model_params.static,
+                    contrast_var=self.config.contrast_var,
+                    brightness_var=self.config.brightness_var,
+                    saturation_var=self.config.saturation_var,
+                    hue_var=self.config.hue_var,
+                    p_flip=self.config.p_flip,
+                )
+                out = model(image_in, image_rec)
 
-            mu = out.mu
-            part_maps = out.part_maps
-            transform_mesh = F.interpolate(
-                t_mesh,
-                (self.config.model_params.heat_dim, self.config.model_params.heat_dim),
-            )
-            mu_t_1, mu_t_2, stddev_t_1, stddev_t_2 = propagate_mu_L(
-                transform_mesh, part_maps
-            )
+                mu = out.mu
+                part_maps = out.part_maps
+                transform_mesh = F.interpolate(
+                    t_mesh,
+                    (
+                        self.config.model_params.heat_dim,
+                        self.config.model_params.heat_dim,
+                    ),
+                )
+                mu_t_1, mu_t_2, stddev_t_1, stddev_t_2 = propagate_mu_L(
+                    transform_mesh, part_maps
+                )
 
-            transform_loss_val = losses_pt.transform_loss(mu_t_1, mu_t_2)
-            precision_loss_val = losses_pt.precision_loss(stddev_t_1, stddev_t_2)
-            l2_loss, heat_mask_l2 = losses_pt.reconstruction_loss(
-                out.reconstruct_same_id,
-                image_rec,
-                out.mu.detach(),
-                out.L_inv.detach(),
-                self.config.model_params.l_2_scal,
-                self.config.model_params.l_2_threshold,
-            )
+                transform_loss_val = losses_pt.transform_loss(mu_t_1, mu_t_2)
+                precision_loss_val = losses_pt.precision_loss(stddev_t_1, stddev_t_2)
+                l2_loss, heat_mask_l2 = losses_pt.reconstruction_loss(
+                    out.reconstruct_same_id,
+                    image_rec,
+                    out.mu.detach(),
+                    out.L_inv.detach(),
+                    self.config.model_params.l_2_scal,
+                    self.config.model_params.l_2_threshold,
+                )
 
-            total_loss = (
-                transform_loss_val * self.loss_params.lambda_t
-                + precision_loss_val * self.loss_params.lambda_p
-                + l2_loss * self.loss_params.lambda_r
-            )
+                # todo: add adversarial logs
 
-            logs = {"images": {}, "scalars": {}}  # images and scalars
-            scalar_logs = {
-                "loss_transform": transform_loss_val,
-                "loss_precision": precision_loss_val,
-                "loss_l2": l2_loss,
-                "loss_total": total_loss,
-            }
+                total_loss = (
+                    transform_loss_val * self.loss_params.lambda_t
+                    + precision_loss_val * self.loss_params.lambda_p
+                    + l2_loss * self.loss_params.lambda_r
+                )
 
-            visualizations = model_pt.make_visualizations(
-                out,
-                image_in,
-                image_rec,
-                heat_mask_l2,
-                transform_mesh,
-                self.config.model_params.l_2_threshold,
-                self.config.model_params.in_dim,
-                self.config.model_params.part_depths,
-                self.config.model_params.n_c,
-                self.config.model_params.n_parts,
-                self.config.model_params.bn,
-                self.config.model_params.adversarial,
-            )
+                logs = {"images": {}, "scalars": {}}  # images and scalars
+                scalar_logs = {
+                    "loss_transform": transform_loss_val,
+                    "loss_precision": precision_loss_val,
+                    "loss_l2": l2_loss,
+                    "loss_total": total_loss,
+                }
 
-            logs["scalars"].update(scalar_logs)
-            logs["images"].update(visualizations)
+                visualizations = model_pt.make_visualizations(
+                    out,
+                    image_in,
+                    image_rec,
+                    heat_mask_l2,
+                    transform_mesh,
+                    self.config.model_params.l_2_threshold,
+                    self.config.model_params.in_dim,
+                    self.config.model_params.part_depths,
+                    self.config.model_params.n_c,
+                    self.config.model_params.n_parts,
+                    self.config.model_params.bn,
+                    self.config.model_params.adversarial,
+                )
 
-            import functools
+                logs["scalars"].update(scalar_logs)
+                logs["images"].update(visualizations)
 
-            func = functools.partial(to_numpy, permute=True)
-            logs["images"] = recursive_apply(logs["images"], func)
-            logs["scalars"] = recursive_apply(logs["scalars"], to_numpy)
+                import functools
+
+                func = functools.partial(to_numpy, permute=True)
+                logs["images"] = recursive_apply(logs["images"], func)
+                logs["scalars"] = recursive_apply(logs["scalars"], to_numpy)
             return logs
 
         def eval_op():
-            # pass
             return {}
-            # model.eval()
-            # eval_logs = {"outputs": {}, "labels": {}}  # eval_logs
-            # # return eval_logs
-            # return
 
         return {"train_op": train_op, "log_op": log_op, "eval_op": eval_op}
-
-        # TODO: perceptual loss
 
 
 def propagate_mu_L(transform_mesh, part_maps):
@@ -263,16 +283,6 @@ def propagate_mu_L(transform_mesh, part_maps):
     mu_t_1, mu_t_2 = split_batch(mu_t)
     stddev_t_1, stddev_t_2 = split_batch(stddev_t)
     return mu_t_1, mu_t_2, stddev_t_1, stddev_t_2
-
-
-def to_numpy(x):
-    """automatically detach and move to cpu if necessary."""
-    if isinstance(x, torch.Tensor):
-        if x.is_cuda:
-            x = x.detach().cpu().numpy()
-        else:
-            x = x.detach().numpy()
-    return x
 
 
 def to_numpy(x, permute=False):

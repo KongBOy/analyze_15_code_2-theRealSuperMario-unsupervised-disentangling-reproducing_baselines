@@ -415,7 +415,6 @@ def precision_dist_op(precision, dist, part_depth, nk, h, w):
     heat = 1 / (1 + proj_precision)
     heat = heat.view([-1, nk, h, w])
     part_heat = heat[:, :part_depth]
-    part_heat = part_heat.permute([0, 2, 3, 1])
     return heat, part_heat
 
 
@@ -495,15 +494,15 @@ def feat_mu_to_enc(
                 heat_scal_norm = torch.sum(heat_scal, dim=1, keepdims=True) + 1
                 heat_scal = heat_scal / heat_scal_norm
 
-            heat_feat_map = torch.einsum("bkij,bkn->bijn", heat_scal, feature_slice_rev)
+            heat_feat_map = torch.einsum("bkij,bkn->bnij", heat_scal, feature_slice_rev)
 
             if covariance:
                 encoding_list.append(
-                    torch.cat([part_heat_shape, heat_feat_map], dim=-1)
+                    torch.cat([part_heat_shape, heat_feat_map], dim=1)
                 )
 
             else:
-                encoding_list.append(torch.cat([part_heat_circ, heat_feat_map], dim=-1))
+                encoding_list.append(torch.cat([part_heat_circ, heat_feat_map], dim=1))
 
         else:
             if covariance:
@@ -540,82 +539,57 @@ def unary_mat(vector):
 
 
 def get_img_slice_around_mu(img, mu, slice_size):
-    img = tfpyth.th_2D_channels_first_to_last(img)
-
     h, w, = slice_size
-    bn, img_h, img_w, c = img.shape
+    bn, c, img_h, img_w, = img.shape
     bn_2, nk, _ = mu.shape
     assert int(h / 2)
     assert int(w / 2)
     assert bn_2 == bn
 
-    scal = torch.from_numpy(np.array([img_h, img_w], dtype=np.float32))
+    scal = torch.from_numpy(np.array([img_h, img_w], dtype=np.float32)).to(mu.device)
     mu = mu.detach()
     mu_no_grad = torch.einsum("bkj,j->bkj", (mu + 1) / 2.0, scal)
     mu_no_grad = torch_astype(mu_no_grad, torch.int32)
     mu_no_grad = torch_reshape(mu_no_grad, [-1, nk, 1, 1, 2])
-    y = tile_nd(
-        torch_reshape(torch.arange(-h // 2, h // 2), [1, 1, h, 1, 1]), [bn, nk, 1, w, 1]
-    )
-    x = tile_nd(
-        torch_reshape(torch.arange(-w // 2, w // 2), [1, 1, 1, w, 1]), [bn, nk, h, 1, 1]
-    )
 
-    field = torch.cat([y, x], dim=-1) + mu_no_grad
-    h1 = tile_nd(torch_reshape(torch.arange(bn), (bn, 1, 1, 1, 1)), [1, nk, h, w, 1])
-    idx = torch.cat([h1, field], dim=-1)
-    idx = torch_astype(idx, torch.int64)
+    indices = torch.stack(torch.meshgrid(torch.arange(bn), torch.arange(nk), torch.arange(c), torch.arange(-h // 2, h // 2), torch.arange(-w // 2, w // 2)), dim=-1)
+    indices = indices.to(mu.device)
+    indices[..., 3] = indices[..., 3] + mu_no_grad[..., 0].view((bn, nk, 1, 1, 1)) # subtract y
+    indices[..., 4] = indices[..., 4] + mu_no_grad[..., 1].view((bn, nk, 1, 1, 1))  # subtract x
+    indices = indices.long().clamp(0, img_h-1)
 
-
-    image_slices = []
-    for ib in range(idx.shape[0]):
-        for ik in range(idx.shape[1]):
-            gathered = [gather_nd(img[ib, ...], idx[ib, ik, ..., i].view((-1, 1))).view((49, 49, 1)) for i in range(3)]
-            gathered = torch.cat(gathered, dim=-1) # [49, 49, 3]
-            image_slices.append(gathered)
-    image_slices = torch.stack(image_slices, dim=0).view(idx.shape)
-
-    # image_slices = gather_nd(img, idx, img.shape, idx.shape)
-    image_slices = image_slices.permute(
-        (0, 1, 4, 2, 3)
-    )  # [N, nk, H, W, C] -> [N, nk, C, H, W]
+    image_batch = tile_nd(torch.unsqueeze(img, 1), [1, nk, 1, 1, 1])
+    image_slices = gather_nd(image_batch, indices)
     return image_slices
-
-
-# def gather_nd(params, indices, params_shape, indices_shape):
-    """dirty wrapper for tf.gather_nd to use with pytorch"""
-
-    # def func(params, indices):
-    #     return tf.gather_nd(params, indices)
-
-    # out = tfpyth.wrap_torch_from_tensorflow(
-    #     func,
-    #     ["params", "indices"],
-    #     input_shapes=[params_shape, indices_shape],
-    #     input_dtypes=[tf.float32, tf.int32],
-    # )(params, indices)
-    # return out
 
 
 def gather_nd(params, indices):
     '''
-    the input indices must be a 2d tensor in the form of [[a,b,..,c],...], 
-    which represents the location of the elements.
+    4D example
+    params: tensor shaped [n_1, n_2, n_3, n_4] --> 4 dimensional
+    indices: tensor shaped [m_1, m_2, m_3, m_4, 4] --> multidimensional list of 4D indices
+    
+    returns: tensor shaped [m_1, m_2, m_3, m_4]
+    
+    ND_example
+    params: tensor shaped [n_1, ..., n_p] --> d-dimensional tensor
+    indices: tensor shaped [m_1, ..., m_i, d] --> multidimensional list of d-dimensional indices
+    
+    returns: tensor shaped [m_1, ..., m_1]
     '''
-    import functools
-    import operator
-    max_value = functools.reduce(operator.mul, list(params.size())) - 1
-    indices = indices.t().long()
-    ndim = indices.size(0)
-    idx = torch.zeros_like(indices[0]).long()
+
+    out_shape = indices.shape[:-1]
+    indices = indices.unsqueeze(0).transpose(0, -1) # roll last axis to fring
+    ndim = indices.shape[0]
+    indices = indices.long()
+    idx = torch.zeros_like(indices[0], device=indices.device).long()
     m = 1
+    
     for i in range(ndim)[::-1]:
         idx += indices[i] * m 
         m *= params.size(i)
-
-    idx[idx < 0] = 0
-    idx[idx > max_value] = 0
-    return torch.take(params, idx)
+    out = torch.take(params, idx)
+    return out.view(out_shape)
 
 
 def fold_img_with_mu(img, mu, scale, threshold, normalize=True):
