@@ -42,7 +42,7 @@ model_params:
   covariance: False # default false in original, enabled using --covariance
   average_features_mode: False
   heat_feat_normalize: True
-  static: False # dataset does not consist of single images
+  static: True # dataset does not consist of single images
   reconstr_dim: 128
   n_c: 3  
   bn: 24
