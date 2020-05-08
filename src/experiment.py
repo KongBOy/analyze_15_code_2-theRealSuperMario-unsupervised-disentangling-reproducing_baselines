@@ -242,6 +242,22 @@ class Iterator(TemplateIterator):
 
         # TODO: perceptual loss
 
+    def get_fixed_examples(self, names):
+        """collect fixed examples from dataset with names
+        # TODO: read fixed example indices from config
+        """
+        if not hasattr(self, "fixed_examples"):
+            fixed_random_indices = np.random.RandomState(1).choice(
+                len(self.dataset), self.config["batch_size"]
+            )
+            fixed_examples = {}
+            for n in names:
+                fixed_examples_n = [self.dataset[i][n] for i in fixed_random_indices]
+                fixed_examples_n = np.stack(fixed_examples_n)
+                fixed_examples[n] = to_torch(fixed_examples_n, True)
+            self.fixed_examples = DotMap(fixed_examples)
+        return self.fixed_examples
+
 
 def propagate_mu_L(transform_mesh, part_maps):
     volume_mesh = ops_pt.AbsDetJacobian(transform_mesh)
