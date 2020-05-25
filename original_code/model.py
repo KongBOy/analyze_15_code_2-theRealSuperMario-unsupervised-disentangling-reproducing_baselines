@@ -145,9 +145,9 @@ class Model:
 
         # NOTE: introduced conditionals only to facilitate testing
         if optimize:
-        self.optimize
+            self.optimize
         if visualize:
-        self.visualize()
+            self.visualize()
 
     def graph(self):
         with tf.variable_scope("tps"):
