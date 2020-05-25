@@ -435,7 +435,7 @@ def get_img_slice_around_mu(img, mu, slice_size):
     mu_no_grad = tf.einsum("bkj,j->bkj", (mu + 1) / 2.0, scal)
     mu_no_grad = tf.cast(mu_no_grad, dtype=tf.int32)
 
-    mu_no_grad = tf.reshape(mu_no_grad, shape=[bn, nk, 1, 1, 2])
+    mu_no_grad = tf.reshape(mu_no_grad, shape=[-1, nk, 1, 1, 2])
     y = tf.tile(
         tf.reshape(tf.range(-h // 2, h // 2), [1, 1, h, 1, 1]), [bn, nk, 1, w, 1]
     )
