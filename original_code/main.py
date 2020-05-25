@@ -17,8 +17,7 @@ import tensorflow as tf
 
 
 def main(arg):
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(arg.gpu)
-    model_save_dir = "../experiments/" + arg.name + "/"
+    model_save_dir = os.path.join("experiments", arg.name)
 
     with tf.variable_scope("Data_prep"):
         if arg.mode == "train":
@@ -70,17 +69,19 @@ def main(arg):
 
         if arg.mode == "train":
             if arg.load:
-                ckpt, ctr = find_ckpt(model_save_dir + "saved_model/")
+                ckpt, ctr = find_ckpt(os.path.join(model_save_dir, "saved_model"))
                 saver.restore(sess, ckpt)
             else:
-                save_python_files(save_dir=model_save_dir + "bin/")
+                save_python_files(save_dir=os.path.join(model_save_dir, "bin"))
                 write_hyperparameters(arg.toDict(), model_save_dir)
                 sess.run(tf.global_variables_initializer())
 
-            writer = tf.summary.FileWriter("../summaries/" + arg.name, graph=sess.graph)
+            writer = tf.summary.FileWriter(
+                os.path.join("summaries", arg.name), graph=sess.graph
+            )
 
         elif arg.mode == "predict":
-            ckpt, ctr = find_ckpt(model_save_dir + "saved_model/")
+            ckpt, ctr = find_ckpt(os.path.join(model_save_dir, "saved_model"))
             saver.restore(sess, ckpt)
 
         initialize_uninitialized(sess)
@@ -107,7 +108,9 @@ def main(arg):
                     if np.mod(ctr, arg.save_interval) == 0:
                         saver.save(
                             sess,
-                            model_save_dir + "/saved_model/" + "save_net.ckpt",
+                            os.path.join(
+                                model_save_dir, "saved_model", "save_net.ckpt"
+                            ),
                             global_step=ctr,
                         )
 

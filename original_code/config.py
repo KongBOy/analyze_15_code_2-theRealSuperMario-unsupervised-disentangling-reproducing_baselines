@@ -2,8 +2,8 @@ import argparse
 import json
 from dataloading import dataset_map_train
 from architectures import decoder_map, encoder_map
+import os
 
-import tensorflow as tf
 
 
 def parse_args():
@@ -205,7 +205,7 @@ def parse_args():
 
 
 def write_hyperparameters(r, save_dir):
-    filename = save_dir + "config.txt"
+    filename = os.path.join(save_dir, "config.txt")
     with open(filename, "a") as input_file:
         for k, v in r.items():
             line = "{}, {}".format(k, v)

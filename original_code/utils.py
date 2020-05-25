@@ -243,7 +243,7 @@ def save_python_files(save_dir):
     assert not os.path.exists(save_dir)
     os.makedirs(save_dir)
     for file in glob.glob("*.py"):
-        copyfile(src=file, dst=save_dir + file)
+        copyfile(src=file, dst=os.path.join(save_dir, file))
 
 
 def find_ckpt(dir):
