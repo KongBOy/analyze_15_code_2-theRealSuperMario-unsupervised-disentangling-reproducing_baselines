@@ -28,3 +28,5 @@ in-shop subset of Deepfashion and filter out those images where all keypoints ar
 * To get the keypoints, I simply used Alpha Pose.
 * The custom subset is released under [custum_datasets/deepfashion](custum_datasets/deepfashion/README.md)
 
+
+A pretrained checkpoint is available [here](https://heibox.uni-heidelberg.de/f/c2e7b6a77f2f4736a01f/?dl=1).
