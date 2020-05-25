@@ -21,8 +21,16 @@ from transformations import ThinPlateSpline, make_input_tps_param
 from architectures import decoder_map, encoder_map, discriminator_patch
 
 
+
 class Model:
-    def __init__(self, orig_img, arg, tps_param_dic):
+    def __init__(self, orig_img, arg, tps_param_dic, optimize=True, visualize=True):
+        """
+        :param orig_img:
+        :param arg: object with following fields:  "in_dim, n_c, reconstr_dim, heat_dim, n_parts, n_features, nFeat1, nFeat2 rec_stages, part_depths, feat_slices, covariance,
+        average_feature_mode, heat_feat_normalize, static, bn, l2_threshold,
+        patch_size, fold_with_shape, L1, l_2_scal, l_2_threshold, c_loss
+        :param tps_param_dic:
+        """
 
         self.arg = arg
 
@@ -48,14 +56,18 @@ class Model:
         self.heat_mask_l2, self.fold_img_squared = None, None
 
         # adverserial
-        self.adverserial = self.arg.adverserial
+        self.adversarial = self.arg.adversarial
         self.t_D, self.t_D_logits = None, None
         self.patches = None
 
         self.update_ops = None
 
         self.graph()
+
+        # NOTE: introduced conditionals only to facilitate testing
+        if optimize:
         self.optimize
+        if visualize:
         self.visualize()
 
     def graph(self):
@@ -99,8 +111,10 @@ class Model:
             self.mu_t = tf.einsum("aijk,aijl->akl", self.integrant, self.transform_mesh)
             transform_mesh_out_prod = tf.einsum(
                 "aijm,aijn->aijmn", self.transform_mesh, self.transform_mesh
-            )
-            mu_out_prod = tf.einsum("akm,akn->akmn", self.mu_t, self.mu_t)
+            )  # [2, 64, 64, 2, 2
+            mu_out_prod = tf.einsum(
+                "akm,akn->akmn", self.mu_t, self.mu_t
+            )  # [2, 16, 2, 2]
             self.stddev_t = (
                 tf.einsum("aijk,aijmn->akmn", self.integrant, transform_mesh_out_prod)
                 - mu_out_prod
@@ -129,7 +143,7 @@ class Model:
                     self.arg.n_c,
                 )
 
-        if self.adverserial:
+        if self.adversarial:
             with tf.variable_scope("adverserial_on_patches"):
                 flatten_dim = 2 * self.arg.bn * self.arg.n_parts
                 part_map_last_layer = self.encoding_same_id[0][
@@ -215,12 +229,12 @@ class Model:
             )
 
         self.fold_img_squared = fold_img_squared
-        tf.summary.image(
-            name="l2_loss", tensor=fold_img_squared, max_outputs=4, family="reconstr"
-        )
+        # tf.summary.image(
+        #     name="l2_loss", tensor=fold_img_squared, max_outputs=4, family="reconstr"
+        # )
         l2_loss = tf.reduce_mean(tf.reduce_sum(fold_img_squared, axis=[1, 2]))
 
-        if self.adverserial:
+        if self.adversarial:
             flatten_dim = 2 * self.arg.bn * self.arg.n_parts
             D, D_ = self.t_D[:flatten_dim], self.t_D[flatten_dim:]
             D_logits, D_logits_ = (
@@ -265,7 +279,7 @@ class Model:
         tf.summary.scalar(name="l2", tensor=l2_loss)
         tf.summary.scalar(name="transform_loss", tensor=transform_loss)
         tf.summary.scalar(name="precision_loss", tensor=precision_loss)
-        if self.adverserial:
+        if self.adversarial:
             tf.summary.scalar(name="g_loss", tensor=g_loss)
             tf.summary.scalar(name="d_loss", tensor=d_loss)
 
@@ -274,7 +288,7 @@ class Model:
         rest_vars = [var for var in tvar if "discriminator" not in var.name]
 
         if self.arg.print_vars:
-            if self.adverserial:
+            if self.adversarial:
                 print("adverserial_vars")
                 for var in adverserial_vars:
                     print(var)
@@ -288,7 +302,7 @@ class Model:
 
             optimizer_d = tf.train.AdamOptimizer(learning_rate=self.arg.lr_d)
 
-            if self.adverserial:
+            if self.adversarial:
                 return (
                     optimizer.minimize(total_loss, var_list=rest_vars),
                     optimizer_d.minimize(d_loss, var_list=adverserial_vars),
@@ -335,9 +349,8 @@ class Model:
             max_outputs=4,
             family="t_2",
         )
-        # tf.summary.image(name="VolumeElement", tensor=self.volume_mesh, max_outputs=4, family="Volume")
 
-        if self.adverserial:
+        if self.adversarial:
             f_dim = 2 * self.arg.bn * self.arg.n_parts
             with tf.variable_scope("patch_real"):
                 tf.summary.image(
