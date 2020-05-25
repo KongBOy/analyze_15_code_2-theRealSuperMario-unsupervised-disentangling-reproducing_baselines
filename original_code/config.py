@@ -1,9 +1,7 @@
 import argparse
-import json
 from dataloading import dataset_map_train
 from architectures import decoder_map, encoder_map
 import os
-
 
 
 def parse_args():
@@ -161,7 +159,7 @@ def parse_args():
     parser.add_argument("--p_flip", default=0.0, type=float, help="contrast variation")
 
     # adverserial
-    parser.add_argument("--adverserial", action="store_true")
+    parser.add_argument("--adversarial", action="store_true")
     parser.add_argument(
         "--c_g",
         default=0.0002,
