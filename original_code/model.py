@@ -8,7 +8,6 @@ from ops import (
     fold_img_with_L_inv,
     prepare_pairs,
     AbsDetJacobian,
-    augm_mu,
     get_img_slice_around_mu,
 )
 from utils import (
