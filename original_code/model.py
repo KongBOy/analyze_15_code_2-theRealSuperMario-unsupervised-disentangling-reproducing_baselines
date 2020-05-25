@@ -20,6 +20,86 @@ from utils import (
 from transformations import ThinPlateSpline, make_input_tps_param
 from architectures import decoder_map, encoder_map, discriminator_patch
 
+import dataclasses
+
+
+@dataclasses.dataclass
+class ModelArgs:
+    in_dim = 128
+    n_c = 3
+    reconstr_dim = 128
+    heat_dim = 64
+    n_parts = 16
+    n_features = 64
+    nFeat1 = 256
+    nFeat2 = 256
+    mode = "train"
+    encoder = "seperate"
+    decoder = "standard"
+    adverserial = False  # TODO: fix typo in code
+    static = True
+    contrast_var = 0.5
+    brightness_var = 0.3
+    saturation_var = 0.1
+    hue_var = 0.3
+    p_flip = 0.0
+    nFeat_1 = 256
+    nFeat_2 = 256
+    L_inv_scal = 0.8
+    l_2_threshold = 0.2
+    l_2_scal = 0.1
+    rec_stages = [
+        [128, 128],
+        [64, 64],
+        [32, 32],
+        [16, 16],
+        [8, 8],
+        [4, 4],
+    ]  # 128x128 model
+    part_depths = [
+        16,
+        16,
+        16,
+        16,
+        4,
+        2,
+    ]  # originally [arg.n_parts, arg.n_parts, arg.n_parts, arg.n_parts, 4, 2], # 128x128 model
+    feat_slices = [[0, 0], [0, 0], [0, 0], [4, 16], [2, 4], [0, 2]]  # 128x128 model
+    covariance = True
+    average_features_mode = False
+    heat_feat_normalize = True
+    bn: int = 32
+    patch_size = [49, 49]
+    L1: bool = False
+    fold_with_shape: bool = False
+    c_l2: float = 1.0
+    c_trans: float = 5.0
+    c_precision_trans: float = 0.1
+    c_t: float = 1.0
+    c_g: float = 0.0002
+    print_vars: bool = False
+    lr: float = 0.0001
+    lr_d: float = 0.0001
+    adversarial: bool = False
+
+    # rec_stages
+    # part_depths
+    # feat_slices
+    # covariance
+    # average_feature_mode
+    # heat_feat_normalize
+    # static
+    # bn
+    # l2_threshold
+    # patch_size
+    # fold_with_shape
+    # L1
+    # l_2_scal = 0.1
+    # l_2_threshold = 0.2
+    # c_loss
+    # c_trans
+    # c_g
+    # c_precision_trans
 
 
 class Model:
