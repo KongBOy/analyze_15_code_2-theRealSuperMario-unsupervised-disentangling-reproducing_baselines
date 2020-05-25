@@ -26,7 +26,7 @@ python main.py baseline_deepfashion_256 \
 * Note that I had to make a custom split of the data for Deepfashion, which is basically going through all the data in the 
 in-shop subset of Deepfashion and filter out those images where all keypoints are visible.
 * To get the keypoints, I simply used Alpha Pose.
-* The custom subset is released under [custum_datasets/deepfashion](custum_datasets/deepfashion/README.md)
+* The custom subset is released under [custom_datasets/deepfashion](custom_datasets/deepfashion/README.md)
 
 
 A pretrained checkpoint is available [here](https://heibox.uni-heidelberg.de/f/c2e7b6a77f2f4736a01f/?dl=1).
