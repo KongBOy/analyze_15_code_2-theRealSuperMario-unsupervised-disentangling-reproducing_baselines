@@ -1,7 +1,7 @@
 from utils import wrappy
 import tensorflow as tf
 from architecture_ops import _residual, _conv_bn_relu, _conv, nccuc
-from ops import softmax, get_features
+from ops import softmax
 
 
 @wrappy
@@ -54,12 +54,28 @@ def discriminator_patch(image, train):
 
 
 @wrappy
-def decoder(encoding_list, train, reconstr_dim, n_c):
+def decoder(encoding_list, train, reconstr_dim, n_reconstruction_channels):
+    """
+    :param encoding_list:
+        list of feature maps at each stage to merge.
+        For `reconstr_dim = 128?` this is something like
+        encoding_list = [
+            tf.zeros((1, 128 // (2 ** i), 128 // (2 ** i), 128)) for i in range(6)
+        ]
+    :param train:
+    :param reconstr_dim:
+    :param n_reconstruction_channels:
+    :return:
+    """
     padding = "SAME"
 
-    input = encoding_list[-1]
-    conv1 = nccuc(input, encoding_list[-2], [512, 512], padding, train, name=1)  # 8
-    conv2 = nccuc(conv1, encoding_list[-3], [512, 256], padding, train, name=2)  # 16
+    input = encoding_list[-1]  # 128 channels
+    conv1 = nccuc(
+        input, encoding_list[-2], [512, 512], padding, train, name=1
+    )  # 8, 64 channels
+    conv2 = nccuc(
+        conv1, encoding_list[-3], [512, 256], padding, train, name=2
+    )  # 16, 384 channels
     conv3 = nccuc(conv2, encoding_list[-4], [256, 256], padding, train, name=3)  # 32
 
     if reconstr_dim == 128:
@@ -71,7 +87,7 @@ def decoder(encoding_list, train, reconstr_dim, n_c):
         )  # 128
         conv6 = tf.layers.conv2d(
             conv5,
-            n_c,
+            n_reconstruction_channels,
             6,
             strides=1,
             padding="SAME",
@@ -92,7 +108,7 @@ def decoder(encoding_list, train, reconstr_dim, n_c):
         )  # 256
         conv7 = tf.layers.conv2d(
             conv6,
-            n_c,
+            n_reconstruction_channels,
             6,
             strides=1,
             padding="SAME",
@@ -146,11 +162,6 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
     out_ = [None] * 2
     sum_ = [None] * 2
 
-    nFeat_1 = nFeat_1
-    nFeat_2 = nFeat_2
-
-    train = train
-
     with tf.variable_scope("model"):
         with tf.variable_scope("preprocessing"):
             if h == 256:
@@ -171,7 +182,9 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 r3 = _residual(r2, num_out=nFeat_1, train=train, name="r3")
 
             elif h == 128:
-                pad1 = tf.pad(inputs, [[0, 0], [2, 2], [2, 2], [0, 0]], name="pad_1")
+                pad1 = tf.pad(
+                    inputs, [[0, 0], [2, 2], [2, 2], [0, 0]], name="pad_1"
+                )  # shape [1, 132, 132, 10]
                 conv1 = _conv_bn_relu(
                     pad1,
                     filters=64,
@@ -179,9 +192,9 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                     kernel_size=6,
                     strides=2,
                     name="conv_64_to_32",
-                )
+                )  # shape [1, 64, 64, 64]
                 r3 = _residual(conv1, num_out=nFeat_1, train=train, name="r3")
-
+                # shape [1, 64, 64, nFeat_1]
             elif h == 64:
                 pad1 = tf.pad(inputs, [[0, 0], [3, 2], [3, 2], [0, 0]], name="pad_1")
                 conv1 = _conv_bn_relu(
@@ -198,10 +211,12 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 raise ValueError
 
         with tf.variable_scope("stage_0"):
-            hg[0] = _hourglass(r3, nLow, nFeat_1, train=train, name="hourglass")
+            hg[0] = _hourglass(
+                r3, nLow, nFeat_1, train=train, name="hourglass"
+            )  # [1, 64, 64, nFeat_1]
             drop[0] = tf.layers.dropout(
                 hg[0], rate=dropout_rate, training=train, name="dropout"
-            )
+            )  # [1, 64, 64, nFeat_1]
             ll[0] = _conv_bn_relu(
                 drop[0],
                 nFeat_1,
@@ -210,19 +225,23 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 strides=1,
                 pad="VALID",
                 name="conv",
-            )
-            ll_[0] = _conv(ll[0], nFeat_1, 1, 1, "VALID", "ll")
-            out[0] = _conv(ll[0], n_landmark, 1, 1, "VALID", "out")
-            out_[0] = _conv(softmax(out[0]), nFeat_1, 1, 1, "VALID", "out_")
-            sum_[0] = tf.add_n([out_[0], r3], name="merge")
+            )  # [1, 64, 64, nFeat_1]
+            ll_[0] = _conv(ll[0], nFeat_1, 1, 1, "VALID", "ll")  # [1, 64, 64, nFeat_1]
+            out[0] = _conv(
+                ll[0], n_landmark, 1, 1, "VALID", "out"
+            )  # [1, 64, 64, n_landmark]
+            out_[0] = _conv(
+                softmax(out[0]), nFeat_1, 1, 1, "VALID", "out_"
+            )  # [1, 64, 64, nFeat_1]
+            sum_[0] = tf.add_n([out_[0], r3], name="merge")  # [1, 64, 64, nFeat_1]
 
         with tf.variable_scope("stage_1"):
             hg[1] = _hourglass(
                 sum_[0], n_Low_feat, nFeat_2, train=train, name="hourglass"
-            )
+            )  # [1, 64, 64, nFeat_2]
             drop[1] = tf.layers.dropout(
                 hg[1], rate=dropout_rate, training=train, name="dropout"
-            )
+            )  # [1, 64, 64, nFeat_2]
             ll[1] = _conv_bn_relu(
                 drop[1],
                 nFeat_2,
@@ -231,11 +250,12 @@ def seperate_hourglass(inputs, train, n_landmark, n_features, nFeat_1, nFeat_2):
                 strides=1,
                 pad="VALID",
                 name="conv",
-            )
+            )  # [1, 64, 64, nFeat_2]
 
             out[1] = _conv(ll[1], n_features, 1, 1, "VALID", "out")
+            # [1, 64, 64, n_features]
 
-        features = out[1]
+        features = out[1]  # [1, 64, 64, nFeat_2]
         return softmax(out[0]), features
 
 
