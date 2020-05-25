@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument(
         "--mode", default="train", choices=["train", "predict"], required=True
     )
-    parser.add_argument("--gpu", type=int, required=True)
+    # parser.add_argument("--gpu", type=int, required=True)
     parser.add_argument("--load", action="store_true")
 
     # dataset folder
