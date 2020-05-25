@@ -33,6 +33,12 @@ def main(arg):
         iterator = dataset.make_one_shot_iterator()
         next_element = iterator.get_next()
         b_images = next_element
+        pad_size = arg.pad_size
+        b_images = tf.pad(
+            b_images,
+            tf.constant([[0, 0], [pad_size, pad_size], [pad_size, pad_size], [0, 0]]),
+            constant_values=1,
+        )
 
         orig_images = tf.tile(b_images, [2, 1, 1, 1])
 

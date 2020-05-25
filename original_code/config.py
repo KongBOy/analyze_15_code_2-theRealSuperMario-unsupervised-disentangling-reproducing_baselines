@@ -48,6 +48,9 @@ def parse_args():
     parser.add_argument(
         "--heat_dim", default=64, type=int, choices=[64], help="dim of part_map (fixed)"
     )
+    parser.add_argument(
+        "--pad_size", default=25, type=int, help="input padding of images"
+    )
 
     # modes
     parser.add_argument(
