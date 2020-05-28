@@ -200,6 +200,12 @@ def parse_args():
         type=int,
         help="number of parallel calls for tf map for preprocessing data",
     )
+    parser.add_argument(
+        "--num_steps",
+        default=-1,
+        type=int,
+        help="optional number of stetps. -1 means run untitl manually terminating",
+    )
 
     arg = parser.parse_args()
     return arg

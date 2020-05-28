@@ -91,51 +91,99 @@ def main(arg):
             saver.restore(sess, ckpt)
 
         initialize_uninitialized(sess)
-        while True:
-            try:
-                feed = transformation_parameters(
-                    arg, ctr, no_transform=(arg.mode == "predict")
-                )  # no transform if arg.visualize
-                trf = {
-                    scal: feed.scal,
-                    tps_scal: feed.tps_scal,
-                    scal_var: feed.scal_var,
-                    rot_scal: feed.rot_scal,
-                    off_scal: feed.off_scal,
-                    augm_scal: feed.augm_scal,
-                }
-                ctr += 1
-                if arg.mode == "train":
-                    if np.mod(ctr, arg.summary_interval) == 0:
-                        merged_summary = sess.run(merged, feed_dict=trf)
-                        writer.add_summary(merged_summary, global_step=ctr)
+        if arg.num_steps == -1:
+            while True:
+                try:
+                    feed = transformation_parameters(
+                        arg, ctr, no_transform=(arg.mode == "predict")
+                    )  # no transform if arg.visualize
+                    trf = {
+                        scal: feed.scal,
+                        tps_scal: feed.tps_scal,
+                        scal_var: feed.scal_var,
+                        rot_scal: feed.rot_scal,
+                        off_scal: feed.off_scal,
+                        augm_scal: feed.augm_scal,
+                    }
+                    ctr += 1
+                    if arg.mode == "train":
+                        if np.mod(ctr, arg.summary_interval) == 0:
+                            merged_summary = sess.run(merged, feed_dict=trf)
+                            writer.add_summary(merged_summary, global_step=ctr)
 
-                    _, loss = sess.run([model.optimize, model.loss], feed_dict=trf)
-                    if np.mod(ctr, arg.save_interval) == 0:
-                        saver.save(
-                            sess,
-                            os.path.join(
-                                model_save_dir, "saved_model", "save_net.ckpt"
-                            ),
-                            global_step=ctr,
+                        _, loss = sess.run([model.optimize, model.loss], feed_dict=trf)
+                        if np.mod(ctr, arg.save_interval) == 0:
+                            saver.save(
+                                sess,
+                                os.path.join(
+                                    model_save_dir, "saved_model", "save_net.ckpt"
+                                ),
+                                global_step=ctr,
+                            )
+
+                    elif arg.mode == "predict":
+                        img, img_rec, mu, heat_raw = sess.run(
+                            [
+                                model.image_in,
+                                model.reconstruct_same_id,
+                                model.mu,
+                                batch_colour_map(model.part_maps),
+                            ],
+                            feed_dict=trf,
                         )
 
-                elif arg.mode == "predict":
-                    img, img_rec, mu, heat_raw = sess.run(
-                        [
-                            model.image_in,
-                            model.reconstruct_same_id,
-                            model.mu,
-                            batch_colour_map(model.part_maps),
-                        ],
-                        feed_dict=trf,
-                    )
+                        save(img, mu, ctr)
 
-                    save(img, mu, ctr)
+                except tf.errors.OutOfRangeError:
+                    print("End of training.")
+                    break
+        else:
+            for i in range(arg.num_steps):
+                try:
+                    feed = transformation_parameters(
+                        arg, ctr, no_transform=(arg.mode == "predict")
+                    )  # no transform if arg.visualize
+                    trf = {
+                        scal: feed.scal,
+                        tps_scal: feed.tps_scal,
+                        scal_var: feed.scal_var,
+                        rot_scal: feed.rot_scal,
+                        off_scal: feed.off_scal,
+                        augm_scal: feed.augm_scal,
+                    }
+                    ctr += 1
+                    if arg.mode == "train":
+                        if np.mod(ctr, arg.summary_interval) == 0:
+                            merged_summary = sess.run(merged, feed_dict=trf)
+                            writer.add_summary(merged_summary, global_step=ctr)
 
-            except tf.errors.OutOfRangeError:
-                print("End of training.")
-                break
+                        _, loss = sess.run([model.optimize, model.loss], feed_dict=trf)
+                        if np.mod(ctr, arg.save_interval) == 0:
+                            saver.save(
+                                sess,
+                                os.path.join(
+                                    model_save_dir, "saved_model", "save_net.ckpt"
+                                ),
+                                global_step=ctr,
+                            )
+
+                    elif arg.mode == "predict":
+                        img, img_rec, mu, heat_raw = sess.run(
+                            [
+                                model.image_in,
+                                model.reconstruct_same_id,
+                                model.mu,
+                                batch_colour_map(model.part_maps),
+                            ],
+                            feed_dict=trf,
+                        )
+
+                        save(img, mu, ctr)
+
+                except tf.errors.OutOfRangeError:
+                    print("End of training.")
+                    break
+        print("Done with Training.")
 
 
 if __name__ == "__main__":
