@@ -10,7 +10,10 @@ def parse_args():
 
     # run setting
     parser.add_argument(
-        "--mode", default="train", choices=["train", "predict"], required=True
+        "--mode",
+        default="train",
+        choices=["train", "predict", "infer", "infer_eval", "eval"],
+        required=True,
     )
     # parser.add_argument("--gpu", type=int, required=True)
     parser.add_argument("--load", action="store_true")
@@ -22,6 +25,12 @@ def parse_args():
     parser.add_argument("--covariance", action="store_true")
     parser.add_argument("--feat_shape", default=True, type=bool)
     parser.add_argument("--L1", action="store_true")
+    parser.add_argument(
+        "--pck_tolerance",
+        type=int,
+        default=6,
+        help="tolerance of pck calculation in pixels",
+    )
 
     parser.add_argument("--heat_feat_normalize", default=True, type=bool)
     parser.add_argument("--epochs", default=100000, type=int, help="number of epochs")
