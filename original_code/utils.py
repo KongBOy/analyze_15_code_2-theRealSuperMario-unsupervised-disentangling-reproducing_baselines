@@ -165,10 +165,10 @@ def identify_parts(image, raw, n_parts, version):
         plt.savefig(fname, bbox_inches="tight")
 
 
-def save(img, mu, counter):
+def save(img, mu, counter, model_dir):
     batch_size, out_shape = img.shape[0], img.shape[1:3]
     marker_list = ["o", "v", "s", "|", "_"]
-    directory = os.path.join("../images/landmarks/")
+    directory = os.path.join(model_dir, "images")
     if not os.path.exists(directory):
         os.makedirs(directory)
     s = out_shape[0] // 8
@@ -189,7 +189,7 @@ def save(img, mu, counter):
             )
 
         plt.axis("off")
-        fname = directory + str(counter) + "_" + str(i) + ".png"
+        fname = os.path.join(directory, str(counter) + "_" + str(i) + ".png")
         plt.savefig(fname, bbox_inches="tight")
         plt.close()
 
@@ -247,14 +247,14 @@ def save_python_files(save_dir):
 
 
 def find_ckpt(dir):
-    filename = dir + "checkpoint"
+    filename = os.path.join(dir, "checkpoint")
     if os.path.exists(filename):
         with open(filename) as f:
             content = f.readline()
             ckpt = content.split('"')[1]
             print("found checkpoint :" + ckpt)
             print("counter set to", ckpt.split("-")[-1])
-            return dir + ckpt, int(ckpt.split("-")[-1])
+            return os.path.join(dir, ckpt), int(ckpt.split("-")[-1])
     else:
         raise FileNotFoundError
 
