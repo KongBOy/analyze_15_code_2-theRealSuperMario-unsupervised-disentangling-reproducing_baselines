@@ -3,10 +3,16 @@
 * I tried many ways to reproduce the results and found that the following parameters work well.
 
 
+**IF YOU FIND SOMETHING INCONSISTENT, PLEASE MAKE AN ISSUE**. 
+Srsly, please make an issue so that I can fix it. Thanks :blush: :thumbsup:
+
+
 ## Deepfashion
 
 * Deepfashion is trained on single images, so it is a *static* dataset.
 
+
+### Training the baseline
 ```bash
 export CUDA_VISIBLE_DEVICES=X # instead of main.py --gpu xx
 python main.py baseline_deepfashion_256 \
@@ -48,7 +54,7 @@ A pretrained checkpoint is available [here](https://heibox.uni-heidelberg.de/f/c
 
 
 
-# Inferring keypoints
+### Inferring keypoints
 
 ```bash
 python predict.py baseline_deepfashion_256 \
@@ -61,7 +67,8 @@ python predict.py baseline_deepfashion_256 \
 --saturation_var 0.01 \
 --hue_var 0.01 \
 --adversarial \
---mode infer_eval
+--mode infer_eval \
+--pck_tolerance 6
 ```
 
 
@@ -78,3 +85,10 @@ python predict.py baseline_deepfashion_256_nonadversarial \
 --mode infer_eval \
 --pck_tolerance 6
 ```
+
+
+|     | Adversarial | Non-adversarial |
+| --- | ----------- | -------------- |
+| PCK | 57%         | 52%            |
+
+* this means that the adversarial is probably important
