@@ -178,7 +178,7 @@ def main(arg):
 
             pck_value = pck(distances, arg.pck_tolerance, arg.in_dim)
             with open(os.path.join(model_save_dir, "metrics.txt"), "w") as f:
-                print(f"pck : {pck_value}", file=f)
+                print(f"pck : {100 * pck_value: .0f}%", file=f)
 
 
 if __name__ == "__main__":
