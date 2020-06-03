@@ -255,3 +255,7 @@ dataset_map_test = {
     "csv": load_test_from_csv_nonstatic,
     "deepfashion": load_test_from_csv_static,
 }
+
+
+keypoint_files_map = {"deepfashion": "datasets/deepfashion/data_test.json"}
+
