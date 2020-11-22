@@ -1,0 +1,38 @@
+t_images = Tensor("tps/Reshape_11:0", shape=(16, 256, 256, 3), dtype=float32)
+feed = DotMap(scal=0.8, tps_scal=0.05, rot_scal=0.1, off_scal=0.15, scal_var=0.05, augm_scal=1.0)
+
+b_images Tensor("Data_prep/IteratorGetNext:0", shape=(8, ?, ?, 3), dtype=float32)
+
+
+self.tps_par DotMap(coord=<tf.Tensor 'Data_prep/add:0' shape=(16, 8, 2) dtype=float32>, 
+	vector=<tf.Tensor 'Data_prep/random_uniform_1:0' shape=(16, 8, 2) dtype=float32>, 
+	offset=<tf.Tensor 'Data_prep/random_uniform_2:0' shape=(16, 1, 2) dtype=float32>, 
+	offset_2=<tf.Tensor 'Data_prep/random_uniform_3:0' shape=(16, 1, 2) dtype=float32>, 
+	t_scal=<tf.Tensor 'Data_prep/mul_2:0' shape=(16, 2) dtype=float32>, 
+	rot_mat=<tf.Tensor 'Data_prep/map/TensorArrayStack/TensorArrayGatherV3:0' shape=(16, 2, 2) dtype=float32>, 
+	augm_scal=<tf.Tensor 'Data_prep/augm_scal_placeholder:0' shape=() dtype=float32>)
+	
+coord Tensor("Data_prep/add:0", shape=(16, 8, 2), dtype=float32)
+vector Tensor("tps/sub_2:0", shape=(16, 8, 2), dtype=float32)
+t_images Tensor("tps/Reshape_11:0", shape=(16, 256, 256, 3), dtype=float32)
+t_mesh Tensor("tps/concat_5:0", shape=(16, 256, 256, 2), dtype=float32)
+
+self.image_in Tensor("tps/prepare_pairs/clip_by_value:0", shape=(16, 256, 256, 3), dtype=float32)
+self.image_rec Tensor("tps/prepare_pairs/clip_by_value_1:0", shape=(16, 256, 256, 3), dtype=float32)
+self.transform_mesh Tensor("tps/resize/ResizeBilinear:0", shape=(16, 64, 64, 2), dtype=float32)
+self.volume_mesh Tensor("tps/MirrorPad:0", shape=(16, 64, 64, 1), dtype=float32)
+
+<tf.Tensor 'Data_prep/scal_placeholder:0' shape=() dtype=float32>: 0.8, 
+<tf.Tensor 'Data_prep/tps_placeholder:0' shape=() dtype=float32>: 0.05, 
+<tf.Tensor 'Data_prep/scal_var_placeholder:0' shape=() dtype=float32>: 0.05, 
+<tf.Tensor 'Data_prep/rot_scal_placeholder:0' shape=() dtype=float32>: 0.1, 
+<tf.Tensor 'Data_prep/off_scal_placeholder:0' shape=() dtype=float32>: 0.15, 
+<tf.Tensor 'Data_prep/augm_scal_placeholder:0' shape=() dtype=float32>: 1.0
+
+
+img (16, 256, 256, 3)
+img_rec (16, 256, 256, 3)
+mu (16, 16, 2)
+heat_raw (16, 64, 64, 3)
+image_orig (16, 306, 306, 3)
+kong_image_in (16, 256, 256, 3)
