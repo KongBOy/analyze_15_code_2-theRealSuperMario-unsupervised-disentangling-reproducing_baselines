@@ -116,8 +116,8 @@ class Model:
         self.train = self.arg.mode == "train"
         self.tps_par = tps_param_dic
         self.image_orig = orig_img
-        self.encoder = encoder_map[arg.encoder]     ### 定義encoder
-        self.img_decoder = decoder_map[arg.decoder] ### 定義decoder
+        self.encoder = encoder_map[arg.encoder]     ### 定義encoder，例如seperate
+        self.img_decoder = decoder_map[arg.decoder] ### 定義decoder，例如standard
         self.discriminator = discriminator_patch    ### 定義discriminator
 
         self.image_in, self.image_rec, self.transform_mesh = None, None, None
@@ -148,24 +148,40 @@ class Model:
             self.optimize
         if visualize:
             self.visualize()
+        #########################################################################################################
+        self.kong_t_images = None
 
     def graph(self):
         with tf.variable_scope("tps"):
+            print("self.tps_par", self.tps_par)
             coord, vector = make_input_tps_param(self.tps_par)
+            print("coord", coord)
+            print("vector", vector)
+            
             t_images, t_mesh = ThinPlateSpline(
                 self.image_orig, coord, vector, self.arg.in_dim, self.arg.n_c
             )
+            self.kong_t_images = t_images
+            print("t_images", t_images)
+            print("t_mesh", t_mesh)
+            
             self.image_in, self.image_rec = prepare_pairs(
                 t_images, self.arg.reconstr_dim, self.arg
             )
+            print("self.image_in", self.image_in)
+            print("self.image_rec", self.image_rec) ### 應該是GT
+
             self.transform_mesh = tf.image.resize_images(
                 t_mesh, size=(self.arg.heat_dim, self.arg.heat_dim)
             )
+            print("self.transform_mesh", self.transform_mesh)
+
             self.volume_mesh = AbsDetJacobian(self.transform_mesh)
+            print("self.volume_mesh", self.volume_mesh)
 
         with tf.variable_scope("encoding"):
             self.part_maps, raw_features = self.encoder(
-                self.image_in,
+                self.image_in, ### 這是 扭曲後的 原始影像
                 self.train,
                 self.arg.n_parts,
                 self.arg.n_features,

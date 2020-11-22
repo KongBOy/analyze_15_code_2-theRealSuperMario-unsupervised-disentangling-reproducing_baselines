@@ -15,6 +15,7 @@ from utils import (
 )
 import tensorflow as tf
 
+import matplotlib.pyplot as plt
 
 def main(arg):
     model_save_dir = os.path.join("experiments", arg.name)
@@ -33,6 +34,7 @@ def main(arg):
         iterator = dataset.make_one_shot_iterator()
         next_element = iterator.get_next()
         b_images = next_element
+        print("b_images", b_images)
         pad_size = arg.pad_size
         b_images = tf.pad(
             b_images,
@@ -64,15 +66,15 @@ def main(arg):
 
     ctr = 0
     config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    config.gpu_options.per_process_gpu_memory_fraction = 0.95
+    # config.gpu_options.allow_growth = True
+    # config.gpu_options.per_process_gpu_memory_fraction = 0.95
     with tf.Session(config=config) as sess:
-
+        ### step0
         model = Model(orig_images, arg, tps_param_dic)
         tvar = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
         saver = tf.train.Saver(var_list=tvar)
         merged = tf.summary.merge_all()
-
+        ### step1:load 之前存的模型
         if arg.mode == "train":
             if arg.load:
                 ckpt, ctr = find_ckpt(os.path.join(model_save_dir, "saved_model"))
@@ -89,7 +91,7 @@ def main(arg):
         elif arg.mode == "predict":
             ckpt, ctr = find_ckpt(os.path.join(model_save_dir, "saved_model"))
             saver.restore(sess, ckpt)
-
+        ### step2
         initialize_uninitialized(sess)
         if arg.num_steps == -1:
             while True:
@@ -152,6 +154,8 @@ def main(arg):
                         off_scal: feed.off_scal,
                         augm_scal: feed.augm_scal,
                     }
+                    print("feed~~~~~~~~~~~~~", feed)
+                    print("trf~~~~~~~~~~~~~", trf)
                     ctr += 1
                     if arg.mode == "train":
                         if np.mod(ctr, arg.summary_interval) == 0:
@@ -167,6 +171,33 @@ def main(arg):
                                 ),
                                 global_step=ctr,
                             )
+                        print("here~~~~~~~~~~~~~~~~~~~~~~~~~~")
+                        img, img_rec, mu, heat_raw, image_orig, kong_image_in = sess.run(
+                            [
+                                model.image_in,
+                                model.reconstruct_same_id,
+                                model.mu,
+                                batch_colour_map(model.part_maps),
+                                model.image_orig,
+                                model.image_in
+                            ],
+                            feed_dict=trf,
+                        )
+                        print("img", img.shape)
+                        print("img_rec", img_rec.shape)
+                        print("mu", mu.shape)
+                        print("mu", mu)
+                        print("heat_raw", heat_raw.shape)
+                        print("image_orig", image_orig.shape)
+                        # print("kong_t_images", kong_t_images.shape)
+                        print("kong_image_in", kong_image_in.shape)
+                        plt.imshow(kong_image_in[0])
+                        plt.savefig(model_save_dir+"/kong_image_in[0]")
+                        plt.imshow(image_orig[0])
+                        plt.savefig(model_save_dir+"/image_orig[0]")
+                        plt.close()
+                        save(img, mu, ctr, model_save_dir)
+
 
                     elif arg.mode == "predict":
                         img, img_rec, mu, heat_raw = sess.run(
