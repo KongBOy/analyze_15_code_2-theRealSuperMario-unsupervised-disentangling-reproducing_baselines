@@ -182,7 +182,7 @@ def parse_args():
     parser.add_argument("--print_vars", action="store_true")
     parser.add_argument(
         "--save_interval",
-        default=20000,
+        default=5,
         type=int,
         help="saves model every n gradient steps",
     )

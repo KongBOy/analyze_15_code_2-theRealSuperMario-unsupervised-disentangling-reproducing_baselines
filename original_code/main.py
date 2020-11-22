@@ -139,6 +139,7 @@ def main(arg):
                     break
         else:
             for i in range(arg.num_steps):
+                print("i = ", i)
                 try:
                     feed = transformation_parameters(
                         arg, ctr, no_transform=(arg.mode == "predict")

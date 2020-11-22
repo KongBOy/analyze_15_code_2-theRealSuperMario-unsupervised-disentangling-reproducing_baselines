@@ -1,0 +1,4 @@
+matplotlib
+tensorflow-gpu==1.14
+dotmap
+pandas

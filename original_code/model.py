@@ -116,9 +116,9 @@ class Model:
         self.train = self.arg.mode == "train"
         self.tps_par = tps_param_dic
         self.image_orig = orig_img
-        self.encoder = encoder_map[arg.encoder]
-        self.img_decoder = decoder_map[arg.decoder]
-        self.discriminator = discriminator_patch
+        self.encoder = encoder_map[arg.encoder]     ### 定義encoder
+        self.img_decoder = decoder_map[arg.decoder] ### 定義decoder
+        self.discriminator = discriminator_patch    ### 定義discriminator
 
         self.image_in, self.image_rec, self.transform_mesh = None, None, None
 
@@ -135,13 +135,13 @@ class Model:
         self.heat_mask_l2, self.fold_img_squared = None, None
 
         # adverserial
-        self.adversarial = self.arg.adversarial
+        self.adversarial = self.arg.adversarial  ### 看有沒有要用對抗式訓練
         self.t_D, self.t_D_logits = None, None
         self.patches = None
 
         self.update_ops = None
-
-        self.graph()
+        #########################################################################################################
+        self.graph() ### 開始執行第一個動作囉！
 
         # NOTE: introduced conditionals only to facilitate testing
         if optimize:

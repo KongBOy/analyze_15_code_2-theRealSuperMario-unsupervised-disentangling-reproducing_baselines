@@ -1,0 +1,6 @@
+matplotlib
+tensorflow==1.14
+dotmap
+pandas
+sklearn
+seaborn
