@@ -2,6 +2,65 @@
 	直接複製github：
 		1.有對抗式學習：python main.py baseline_deepfashion_256 			      --dataset deepfashion --mode train --bn 8 --static --in_dim 256 --reconstr_dim 256 --covariance --pad_size 25 --contrast_var 0.01 --brightness_var 0.01 --saturation_var 0.01 --hue_var 0.01 --adversarial --c_precision_trans 0.01
 		2.無對抗式學習：python main.py baseline_deepfashion_256_nonadversarial    --dataset deepfashion --mode train --bn 8 --static --in_dim 256 --reconstr_dim 256 --covariance --pad_size 25 --contrast_var 0.01 --brightness_var 0.01 --saturation_var 0.01 --hue_var 0.01 		      --c_precision_trans 0.01 --num_steps 500001
+			name, baseline_deepfashion_256_nonadversarial
+			mode, train
+			load, False
+			dataset, deepfashion
+			covariance, True
+			feat_shape, True
+			L1, False
+			pck_tolerance, 6
+			heat_feat_normalize, True
+			epochs, 100000
+			decoder, standard
+			encoder, seperate
+			in_dim, 256
+			reconstr_dim, 256
+			heat_dim, 64
+			pad_size, 25
+			l_2_scal, 0.1
+			l_2_threshold, 0.2
+			L_inv_scal, 0.8
+			bn, 8
+			n_parts, 16
+			n_features, 64
+			n_c, 3
+			nFeat_1, 256
+			nFeat_2, 256
+			lr, 0.001
+			lr_d, 0.001
+			c_l2, 1.0
+			c_trans, 5.0
+			c_precision_trans, 0.01
+			c_t, 1.0
+			schedule_scale, 100000
+			scal, [0.8]
+			tps_scal, [0.05]
+			rot_scal, [0.1]
+			off_scal, [0.15]
+			scal_var, [0.05]
+			augm_scal, [1.0]
+			contrast_var, 0.01
+			brightness_var, 0.01
+			saturation_var, 0.01
+			hue_var, 0.01
+			p_flip, 0.0
+			adversarial, False
+			c_g, 0.0002
+			patch_size, [49, 49]
+			print_vars, False
+			save_interval, 5
+			summary_interval, 500
+			static, True
+			chunk_size, 16
+			n_shuffle, 64
+			data_parallel_calls, 4
+			num_steps, 500001
+			rec_stages, [[256, 256], [128, 128], [64, 64], [32, 32], [16, 16], [8, 8], [4, 4]]
+			feat_slices, [[0, 0], [0, 0], [0, 0], [0, 0], [4, 16], [2, 4], [0, 2]]
+			part_depths, [16, 16, 16, 16, 16, 4, 2]
+			average_features_mode, {}
+			fold_with_shape, {}
 
 	
 		用1.且 只訓練10個epoch：python main.py baseline_deepfashion_256 	      --dataset deepfashion --mode train --bn 8 --static --in_dim 256 --reconstr_dim 256 --covariance --pad_size 25 --contrast_var 0.01 --brightness_var 0.01 --saturation_var 0.01 --hue_var 0.01 --adversarial --c_precision_trans 0.01 --num_steps 10
